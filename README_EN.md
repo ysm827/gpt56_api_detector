@@ -1,6 +1,6 @@
 # meow LLM Detector v4.5.2
 
-The latest source supports six-probe baselines with an Other reference and a 98% threshold ceiling. See [baseline scope and limitations](docs/OTHER_BASELINES_CN.md). Existing v4.5.1 portable builds do not support this extension; this update publishes source and baselines, not replacement portable binaries.
+Version 4.5.2 supports six-probe baselines with an Other reference and a 98% threshold ceiling. Startup checks recommend available program and baseline updates without automatically installing them. Source and Windows portable archives are provided. See [baseline scope and limitations](docs/OTHER_BASELINES_CN.md).
 
 [中文](README_CN.md) · [Download](https://github.com/chen-006/meow-llm-detector/releases/latest)
 

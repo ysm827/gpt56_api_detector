@@ -1,6 +1,6 @@
 # meow llm 检测器 v4.5.2
 
-最新源码已支持六题＋Other基准，强指向线最高98%。[基准下载与限制](docs/OTHER_BASELINES_CN.md)。旧4.5.1便携包不支持Other扩展；本次仅更新源码和基准，便携包仍保留原发行版。
+4.5.2已支持六题＋Other基准，强指向线最高98%，并在启动时检查程序和基准更新，发现更新后提示确认。提供源码包和Windows便携包。[基准详情与限制](docs/OTHER_BASELINES_CN.md)。
 
 [English](README_EN.md) · [下载](https://github.com/chen-006/meow-llm-detector/releases/latest)
 

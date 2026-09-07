@@ -3,8 +3,9 @@
 <body>
 <header class="app-header">
   <div class="brand"><svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 17V7l10 6h4l10-6v10c5 14-1 18-12 18S3 31 8 17Z"/><path d="M13 22h2m10 0h2m-9 5 2 2 2-2"/></svg><div><strong>meow</strong><small>LLM DETECTOR</small></div><span class="version-badge">4.5.2</span></div>
-  <div class="header-meta"><span class="preview-label">开发预览 · 非最终版</span><button id="quick-update" class="header-update" type="button">检查更新</button><span id="service-state">连接中</span></div>
+  <div class="header-meta"><button id="quick-update" class="header-update" type="button">检查更新</button><span id="service-state">连接中</span></div>
 </header>
+<div id="startup-updates" class="startup-updates" role="status" hidden><span>建议更新</span><button id="startup-program-update" type="button" hidden>查看版本更新</button><button id="startup-baseline-update" type="button" hidden>查看基准更新</button></div>
 <main>
 <nav class="tabs" aria-label="工作区"><span class="nav-caption">工作台</span><button data-view="detect-view" aria-current="page"><span aria-hidden="true">◉</span> <span>检测</span></button><button data-view="library-view"><span aria-hidden="true">▤</span> <span>基准库</span></button><button data-view="settings-view"><span aria-hidden="true">⇄</span> <span>API 连接预设</span></button><button data-view="make-view"><span aria-hidden="true">＋</span> <span>生成基准</span></button><div class="nav-foot"><span class="local-dot"></span><span>仅在本机运行</span></div></nav>
 <div id="detect-view" class="workspace">

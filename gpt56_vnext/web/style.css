@@ -63,3 +63,6 @@ main { max-width:1512px; margin:auto; padding:46px 48px 80px 254px }
 .verdict.running,.report-note.running{color:#93c6f4;background:#213649;border-color:#548cbd}
 .package-row button.running{color:#93c6f4}
 .match-row>span{overflow-wrap:anywhere;min-width:0}
+/* Startup notices never cover the detection controls. */
+.startup-updates {display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 24px;border-bottom:1px solid currentColor;}
+.startup-updates[hidden] {display:none;}

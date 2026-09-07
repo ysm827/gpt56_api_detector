@@ -1,6 +1,10 @@
 // One interface and one translation catalog; benchmark prompts are never translated.
 let locale = document.documentElement.lang === "en" ? "en" : "zh-CN";
 const english = {
+  "建议更新":"Updates recommended",
+  "查看版本更新":"View program update",
+  "查看基准更新":"View baseline updates",
+  "自动检查暂不可用，可手动重试。":"Automatic check unavailable; you can retry manually.",
   "整次检测重试预算":"Retry budget for this run",
   "默认请求数的50%":"50% of planned requests by default",
   "留空按计划请求数的50%设置；填0不重试。":"Leave blank for 50% of planned requests; enter 0 to disable retries.",

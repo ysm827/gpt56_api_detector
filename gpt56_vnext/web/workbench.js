@@ -658,12 +658,61 @@ action("schedule-delete", async () => {
   await poll();
 }, "preset-notice");
 
-action("program-check", async () => {
-  programUpdate = await post("/api/program/check-update", {locale});
+function renderProgramUpdate(value) {
+  programUpdate = value;
   $("program-status").textContent = t("当前版本 {current} · 最新发布 {latest}", {current: programUpdate.current_version, latest: programUpdate.latest_version}) +
     " · " + t(programUpdate.available ? "有可用更新" : "没有更高的已发布版本");
   $("program-notes").textContent = programUpdate.notes;
   $("program-download").disabled = !programUpdate.available || !programUpdate.download;
+}
+
+function newerVersion(next, current) {
+  const parse = value => /^(\d+)\.(\d+)\.(\d+)(?:-([a-zA-Z0-9.-]+))?$/.exec(value || "");
+  const a=parse(next), b=parse(current);
+  if(!a || !b)return false;
+  for(let i=1;i<=3;i++)if(Number(a[i])!==Number(b[i]))return Number(a[i])>Number(b[i]);
+  if(!a[4] || !b[4])return Boolean(!a[4] && b[4]);
+  return a[4].localeCompare(b[4],"en",{numeric:true})>0;
+}
+
+function baselineUpdateAvailable(remote, local) {
+  return remote.some(item=>{
+    if(item.publisher!=="maintainer" || item.withdrawn)return false;
+    if(local.some(p=>p.id===item.id && p.version===item.version))return false;
+    const same=local.filter(p=>p.id===item.id);
+    const prior=same.length?same:local.filter(p=>p.mode===item.mode && (p.bundled || p.publisher==="maintainer"));
+    return prior.length>0 && prior.every(p=>newerVersion(item.version,p.version));
+  });
+}
+
+let startupChecked=false;
+async function checkStartupUpdates() {
+  if(startupChecked)return;
+  startupChecked=true;
+  const results=await Promise.allSettled([
+    post("/api/program/check-update",{locale}),post("/api/catalog/refresh",{})
+  ]);
+  let program=false, baseline=false;
+  if(results[0].status==="fulfilled"){
+    renderProgramUpdate(results[0].value);program=results[0].value.available;
+  }else $("program-status").textContent=t("自动检查暂不可用，可手动重试。");
+  if(results[1].status==="fulfilled"){
+    state.snapshot.catalog=results[1].value;
+    baseline=baselineUpdateAvailable(results[1].value.packages || [],state.snapshot.packages || []);
+  }else $("library-notice").textContent=t("自动检查暂不可用，可手动重试。");
+  $("startup-program-update").hidden=!program;
+  $("startup-baseline-update").hidden=!baseline;
+  $("startup-updates").hidden=!(program || baseline);
+}
+window.addEventListener("workspace-ready",()=>{void checkStartupUpdates();});
+$("startup-program-update").addEventListener("click",()=>showWorkspace("settings-view"));
+$("startup-baseline-update").addEventListener("click",async()=>{
+  showWorkspace("library-view");
+  try{await refreshWorkbench();}catch(error){$("library-notice").textContent=errorMessage(error);}
+});
+
+action("program-check", async () => {
+  renderProgramUpdate(await post("/api/program/check-update", {locale}));
 }, "program-status");
 $("quick-update").addEventListener("click", () => {
   showWorkspace("settings-view");

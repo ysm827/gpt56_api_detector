@@ -38,8 +38,8 @@ def build(source, output, source_commit):
     assert not subprocess.check_output(['git', '-C', str(source), 'status', '--porcelain'], text=True).strip()
     source_files = runpy.run_path(str(source / 'scripts/build_release.py'))['release_files'](source)
     version = source_files['VERSION'].decode('ascii').strip()
-    if version != '4.5.1':
-        raise ValueError('This release builder requires version 4.5.1')
+    if version != '4.5.2':
+        raise ValueError('This release builder requires version 4.5.2')
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as work:
         work = Path(work)
