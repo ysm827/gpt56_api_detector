@@ -9,6 +9,7 @@ import threading
 from typing import Any, Callable, TypeVar
 
 from .utils import canonical_json, utc_now
+from .errors import AppError
 
 
 SCHEMA_VERSION = 3
@@ -343,27 +344,41 @@ class SQLiteStateStore:
 
         return self._read(read)
 
-    def start_attempt(self, session_id: str, job_id: str, attempt_no: int, *, max_attempts: int | None = None) -> int:
+    def retry_jobs(self, session_id: str) -> list[dict]:
+        return self._read(lambda connection: [json.loads(row[0]) for row in connection.execute(
+            "SELECT j.manifest_json FROM jobs j WHERE j.session_id=? AND j.status!='ok' "
+            "AND EXISTS(SELECT 1 FROM attempts a WHERE a.session_id=j.session_id AND a.job_id=j.job_id) "
+            "ORDER BY j.ordinal", (session_id,))])
+
+    def start_attempt(self, session_id: str, job_id: str, attempt_no: int, *, max_attempts: int | None = None,
+                      retry_budget: int | None = None) -> int:
         now = utc_now()
 
         def write(connection: sqlite3.Connection) -> int:
-            if max_attempts is not None and int(attempt_no) > int(max_attempts):
-                raise ValueError("HTTP attempt budget exhausted")
-            job = connection.execute(
-                "SELECT status FROM jobs WHERE session_id=? AND job_id=?",
-                (session_id, job_id),
-            ).fetchone()
-            if job is None:
-                raise KeyError(job_id)
-            if job["status"] != "pending":
-                raise ValueError(f"job is already terminal: {job['status']}")
-            cursor = connection.execute(
-                "INSERT INTO attempts(session_id,job_id,attempt_no,started_at,status) VALUES(?,?,?,?,'running')",
-                (session_id, job_id, attempt_no, now),
-            )
-            connection.commit()
-            return int(cursor.lastrowid)
+            def transaction():
+                if max_attempts is not None and int(attempt_no) > int(max_attempts):
+                    raise ValueError("HTTP attempt budget exhausted")
+                job = connection.execute(
+                    "SELECT status FROM jobs WHERE session_id=? AND job_id=?",
+                    (session_id, job_id),
+                ).fetchone()
+                if job is None:
+                    raise KeyError(job_id)
+                if retry_budget is not None and attempt_no > 1:
+                    used = connection.execute("SELECT COUNT(*) FROM attempts WHERE session_id=? AND attempt_no>1", (session_id,)).fetchone()[0]
+                    if used >= retry_budget:
+                        raise AppError('retry_budget_exhausted')
+                if job["status"] != "pending" and not (retry_budget is not None and job["status"] == "error"):
+                    raise ValueError(f"job is already terminal: {job['status']}")
+                if retry_budget is not None:
+                    connection.execute("UPDATE jobs SET status='pending' WHERE session_id=? AND job_id=?", (session_id, job_id))
+                cursor = connection.execute(
+                    "INSERT INTO attempts(session_id,job_id,attempt_no,started_at,status) VALUES(?,?,?,?,'running')",
+                    (session_id, job_id, attempt_no, now),
+                )
+                return int(cursor.lastrowid)
 
+            return self._transaction(connection, transaction)
         return self._write(write)
 
     def next_attempt_number(self, session_id: str, job_id: str) -> int:
@@ -482,7 +497,7 @@ class SQLiteStateStore:
 
         return self._write(write)
 
-    def reconcile_incomplete_attempts(self, session_id: str, max_attempts: int) -> dict[str, int]:
+    def reconcile_incomplete_attempts(self, session_id: str, max_attempts: int, *, retry_budget: int | None = None) -> dict[str, int]:
         now = utc_now()
 
         def write(connection: sqlite3.Connection) -> dict[str, int]:
@@ -503,6 +518,7 @@ class SQLiteStateStore:
                         ),
                     )
                 exhausted = 0
+                used = connection.execute("SELECT COUNT(*) FROM attempts WHERE session_id=? AND attempt_no>1", (session_id,)).fetchone()[0]
                 pending_rows = connection.execute(
                     "SELECT j.job_id,j.manifest_json,COUNT(a.attempt_id) AS attempts "
                     "FROM jobs j LEFT JOIN attempts a ON a.session_id=j.session_id AND a.job_id=j.job_id "
@@ -511,7 +527,7 @@ class SQLiteStateStore:
                 ).fetchall()
                 for row in pending_rows:
                     attempts = int(row["attempts"] or 0)
-                    if attempts < int(max_attempts):
+                    if attempts < int(max_attempts) and not (retry_budget is not None and attempts > 0 and used >= retry_budget):
                         continue
                     manifest = json.loads(row["manifest_json"])
                     result = {
@@ -636,6 +652,7 @@ class SQLiteStateStore:
         ).fetchone()
         total_jobs = sum(counts.values())
         completed = sum(counts.get(key, 0) for key in ("ok", "error", "cancelled"))
+        completed += connection.execute("SELECT COUNT(*) FROM jobs WHERE session_id=? AND status='pending' AND final_result_id IS NOT NULL", (session_id,)).fetchone()[0]
         valid = connection.execute(
             "SELECT COUNT(*) FROM jobs j JOIN results r ON r.result_id=j.final_result_id "
             "WHERE j.session_id=? AND j.status='ok' AND json_extract(r.result_json,'$.category') != '__INVALID_OUTPUT__'",
@@ -663,7 +680,8 @@ class SQLiteStateStore:
         def read(connection):
             rows = connection.execute(
                 "SELECT session_id,kind,status,claimed_model,request_model,safe_endpoint,created_at,updated_at, "
-                "json_extract(config_json,'$.project.id') AS project_id "
+                "json_extract(config_json,'$.project.id') AS project_id, "
+                "json_extract(config_json,'$.site_group') AS site_group "
                 "FROM sessions ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
             return [{**dict(row), **self._progress(connection, row["session_id"])} for row in rows]
         return self._read(read)

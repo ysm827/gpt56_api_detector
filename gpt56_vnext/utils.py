@@ -19,6 +19,12 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def normalize_site_group(value: str) -> str:
+    if not isinstance(value, str) or len(value) > 80 or any(ord(c) < 32 or ord(c) == 127 for c in value):
+        raise AppError("invalid_site_group", field="site_group")
+    return value.strip()
+
+
 def canonical_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True, allow_nan=False)
 

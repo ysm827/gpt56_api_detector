@@ -17,10 +17,21 @@ def runtime_options(value: dict) -> dict:
         raise AppError("invalid_runtime_options")
     if type(value.get("retain_raw", False)) is not bool:
         raise AppError("invalid_retention_option")
-    return {"workers": integer(value.get("workers", 8), "workers", 1, 32),
-            "retries": integer(value.get("retries", 2), "retries", 0, 10),
+    result = {"workers": integer(value.get("workers", 8), "workers", 1, 32),
             "timeout": integer(value.get("timeout", 120), "timeout", 10, 600),
             "retain_raw": value.get("retain_raw", False)}
+    if "retry_budget" in value:
+        result['retry_budget'] = integer(value['retry_budget'], 'retry_budget', 0, 1000000)
+    else:
+        result['retries'] = integer(value.get('retries', 2), 'retries', 0, 10)
+    return result
+
+
+def detection_options(value: dict, planned: int) -> dict:
+    options = runtime_options(value)
+    options.pop('retries', None)
+    options['retry_budget'] = integer(value.get('retry_budget', (planned + 1)//2), 'retry_budget', 0, planned*10)
+    return options
 
 
 class FrozenRun:
@@ -35,6 +46,7 @@ class FrozenRun:
             self.guard.check(job, code="credential_in_configuration")
         self.key = key
         self.options = runtime_options(config.get("runtime", {}))
+        self.retry_budget = self.options.get('retry_budget')
         self.base_url = normalize_api_base_url(config["base_url"], allow_insecure=config.get("allow_insecure") is True)
         self.transport = transport or AsyncTransport([key], timeout=self.options["timeout"], concurrency=self.options["workers"])
         self.active = set()
@@ -53,16 +65,18 @@ class FrozenRun:
 
     async def _execute(self, job: dict) -> None:
         cell = self.cells[job["cell_id"]]
-        limit = self.options["retries"] + 1
+        limit = (self.retry_budget if self.retry_budget is not None else self.options['retries']) + 1
         while not self.stopped:
             attempt_number = self.store.next_attempt_number(self.session_id, job["job_id"])
             if attempt_number > limit:
+                return
+            if self.retry_budget is not None and attempt_number > 1 and self.store.progress(self.session_id)['retries'] >= self.retry_budget:
                 return
             attempt_id, started = None, None
 
             def dispatched():
                 nonlocal attempt_id, started
-                attempt_id = self.store.start_attempt(self.session_id, job["job_id"], attempt_number, max_attempts=limit)
+                attempt_id = self.store.start_attempt(self.session_id, job["job_id"], attempt_number, max_attempts=limit, retry_budget=self.retry_budget)
                 started = utc_now()
 
             try:
@@ -75,7 +89,7 @@ class FrozenRun:
                     "answer": response["answer"], "category": normalize_answer(response["answer"], cell["normalizer"]),
                     **{key: response.get(key) for key in ("usage", "http_status", "elapsed_ms", "response_id", "provider")}}
                 self.guard.check(result)
-                if result["category"] == "__INVALID_OUTPUT__" and attempt_number < limit:
+                if result["category"] == "__INVALID_OUTPUT__" and (self.retry_budget is not None or attempt_number < limit):
                     error = RequestError("invalid_answer", status=response.get("http_status"),
                                          evidence={"category": "__INVALID_OUTPUT__"})
                     error.exchange = response
@@ -95,6 +109,10 @@ class FrozenRun:
                         exchange=exchange_record({**getattr(exc, "exchange", {}), "error": {"code": "user_paused"}}, self.guard)
                             if self.options["retain_raw"] else None)
                 raise
+            except AppError as exc:
+                if exc.code != 'retry_budget_exhausted' or attempt_id is not None:
+                    raise
+                return
             except RequestError as exc:
                 if attempt_id is None:
                     raise
@@ -102,42 +120,55 @@ class FrozenRun:
                 safety_stop = exc.code in ("credential_echo", "credential_in_configuration")
                 exc.retryable = not safety_stop
                 retry = not safety_stop and attempt_number < limit and not self.stopped
+                if self.retry_budget is not None:
+                    retry = not safety_stop and not self.stopped and self.store.progress(self.session_id)['retries'] < self.retry_budget
                 result = {"job_id": job["job_id"], "probe_id": job["probe_id"], "cell_id": job["cell_id"],
                           "model": job["model"], "candidate_model": job.get("candidate_model"), "window": job.get("window", 1),
                           "status": "error", "error": exc.public(), "evidence": self.guard.redact(exc.evidence),
                           "started_at": started, "completed_at": utc_now()}
+                if exc.code == 'invalid_answer':result['category'] = '__INVALID_OUTPUT__'
                 self.store.append_event(self.session_id, "attempt_decision", payload={"job_id": job["job_id"],
                     "attempt": attempt_number, "retryable": exc.retryable, "will_retry": retry, "code": exc.code})
                 self.store.finish_attempt(attempt_id=attempt_id, status="error", stage="transport", category=exc.code,
                     retryable=exc.retryable, http_status=exc.status, safe_message=exc.code,
-                    final_result=result if not retry else None, final_job_status="error" if not retry else None,
+                    final_result=result if self.retry_budget is not None or not retry else None,
+                    final_job_status="error" if self.retry_budget is not None or not retry else None,
                     exchange=exchange_record({**getattr(exc, "exchange", {}), "error": exc.public()}, self.guard)
                         if self.options["retain_raw"] else None)
                 if safety_stop:
                     self.failure = exc.code
                     self.stop()
-                if not retry:
+                if self.retry_budget is not None or not retry:
                     return
                 await asyncio.sleep(min(2 ** attempt_number, 8))
 
     async def run(self) -> dict:
-        limit = self.options["retries"] + 1
-        self.store.reconcile_incomplete_attempts(self.session_id, limit)
+        limit = (self.retry_budget if self.retry_budget is not None else self.options['retries']) + 1
+        self.store.reconcile_incomplete_attempts(self.session_id, limit, retry_budget=self.retry_budget)
         self.store.update_session_status(self.session_id, "running", clear_stop=True)
-        queue = asyncio.Queue()
         pending = self.store.pending_jobs(self.session_id, max_attempts=limit)
-        if self.config['kind'] == 'detection':
-            pending.sort(key=lambda job: (int(job['job_id'].rsplit(':', 1)[1]), job['cell_id']))
-        for job in pending:
-            queue.put_nowait(job)
+        if self.retry_budget is not None:
+            pending = [job for job in pending if self.store.next_attempt_number(self.session_id, job['job_id']) == 1]
 
-        async def worker():
-            while not self.stopped and not queue.empty():
-                await self._execute(queue.get_nowait())
-
-        self.active = {asyncio.create_task(worker()) for _ in range(self.options["workers"])}
-        try:
+        async def run_round(jobs):
+            if self.config['kind'] == 'detection':
+                jobs.sort(key=lambda job: (self.store.next_attempt_number(self.session_id, job['job_id']) if self.retry_budget is not None else 0,
+                                          int(job['job_id'].rsplit(':', 1)[1]), job['cell_id']))
+            queue = iter(jobs)
+            async def worker():
+                for job in queue:
+                    if self.stopped:break
+                    await self._execute(job)
+            self.active = {asyncio.create_task(worker()) for _ in range(self.options['workers'])}
             await asyncio.gather(*self.active)
+
+        try:
+            await run_round(pending)
+            while self.retry_budget is not None and not self.stopped and self.store.progress(self.session_id)['retries'] < self.retry_budget:
+                pending = self.store.retry_jobs(self.session_id)
+                if not pending:break
+                await asyncio.sleep(2)
+                await run_round(pending)
         except asyncio.CancelledError:
             self.stopped = True
         except Exception as exc:

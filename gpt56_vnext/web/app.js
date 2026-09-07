@@ -47,6 +47,10 @@ function defaultRequestModel(model) {
   return (model?.request_model || model?.id || "").replace(/^[^/]+\//, "");
 }
 
+function displayModel(id, fallback = id) {
+  return id === "other_known_external" ? (locale === "en" ? "Other" : "其他") : fallback;
+}
+
 function sourceBadge(item) {
   if (!item.source_providers?.includes("openrouter")) return null;
   const badge = document.createElement("span");
@@ -58,7 +62,7 @@ function sourceBadge(item) {
 
 function renderModels() {
   const item = selectedPackage();
-  options($("claimed"), (item?.models || []).map(model => [model.id, model.name || model.id]), t("无可用模型"));
+  options($("claimed"), (item?.models || []).map(model => [model.id, displayModel(model.id, model.name || model.id)]), t("无可用模型"));
   const model = item?.models.find(model => model.id === $("claimed").value);
   const preset = state.snapshot?.endpoints.find(item => item.id === $("endpoint-preset").value && item.mode === $("mode").value);
   if (!$("request-model").value || state.claimedSelection !== model?.id) $("request-model").value = preset?.model || defaultRequestModel(model);
@@ -66,7 +70,7 @@ function renderModels() {
   updateEstimate();
   updateReady();
   $("benchmark-note").textContent = item ? (item.id.startsWith("synthetic-") ? t("这是合成测试基准，仅用于界面联调，不可判断真实模型。") :
-    t("基准包含 {count} 个候选模型。来源与验证范围将在报告中保留。", {count: item.models.length})) : t("尚未安装适用基准。请先到基准库导入或下载。");
+    t("基准包含 {count} 个候选模型。", {count: item.models.length})) : t("尚未安装适用基准。请先到基准库导入或下载。");
   if (item && !item.id.startsWith("synthetic-")) {
     const sources = [...new Set((item.collection?.sources || []).map(source => source.url).filter(Boolean))].join(" / ");
     $("benchmark-note").textContent += " " + t("采集来源：{sources}", {sources: sources || t("未提供")}) + " · " +
@@ -97,7 +101,7 @@ function updateReady() {
   if ($("run-mode").value === "scheduled" && !preset?.credential_saved) missing.push(t("已保存凭据的 API 连接"));
   const running = state.snapshot?.sessions.some(item => item.kind === "detection" && state.snapshot.active.includes(item.session_id));
   $("readiness").textContent = running ? t("当前检测运行中，请先等待或停止。") : missing.length ?
-    t("开始前还需要：{items}", {items: missing.join(" / ")}) : t("准备就绪。只向你指定的 API 发送请求。");
+    t("开始前还需要：{items}", {items: missing.join(" / ")}) : t("准备就绪。");
   $("start").disabled = state.submitting || Boolean(running) || Boolean(missing.length);
 }
 
@@ -113,7 +117,8 @@ function detectionInput() {
     endpoint_id: $("endpoint-preset").value || undefined,
     base_url: $("base-url").value, allow_insecure: $("allow-http").checked, key: $("key").value,
     claimed_model: $("claimed").value, request_model: $("request-model").value,
-    tier: $("tier").value, runtime: {workers: Number($("workers").value), retries: Number($("retries").value), retain_raw: $("retain-raw").checked}};
+    site_group: $("site-group").value,
+    tier: $("tier").value, runtime: {workers: Number($("workers").value), retry_budget: $("retry-budget").value.trim()==="" ? undefined : Number($("retry-budget").value), retain_raw: $("retain-raw").checked}};
 }
 
 let estimateSequence = 0;
@@ -126,55 +131,61 @@ async function updateEstimate() {
     const estimate = await post("/api/run/estimate", input);
     if (sequence === estimateSequence) {
       $("request-count").textContent = estimate.logical_requests;
-      $("detect-estimate").textContent = t("本轮 {requests} 次请求，含重试最多 {attempts} 次。费用取决于待测端，当前未知。", {requests: estimate.logical_requests, attempts: estimate.maximum_http_attempts});
+      $("retry-budget").placeholder = String(Math.ceil(estimate.logical_requests/2));
+      $("retry-budget").max = estimate.logical_requests*10;
+      $("detect-estimate").textContent = t("本轮 {requests} 次请求，含重试最多 {attempts} 次。费用由 API 服务商收取。", {requests: estimate.logical_requests, attempts: estimate.maximum_http_attempts});
     }
   } catch (error) { if (sequence === estimateSequence) $("detect-estimate").textContent = errorMessage(error); }
 }
 
 function renderReportNote(report) {
   const box=$("report-note"), fp=report.fingerprint, cells=Object.entries(fp.cells || {});
-  const missing=cells.filter(([,cell])=>cell.valid<cell.minimum);
+  const running=["prepared","running","stopping"].includes(report.operational_status);
+  const missing=running ? [] : cells.filter(([,cell])=>cell.valid<cell.minimum);
   const valid=report.progress?.valid_samples || 0;
   const make=(tag,text,cls)=>{const node=document.createElement(tag);node.textContent=text;if(cls)node.className=cls;return node;};
-  box.replaceChildren();box.hidden=false;
+  const details=box.dataset.reportId===report.session_id ? box.querySelector("details") || make("details","") : make("details","");
+  box.dataset.reportId=report.session_id;
+  box.replaceChildren();box.hidden=false;box.className="report-note"+(running ? " running" : "");
   const heading=make("div","","report-note-heading");
-  heading.append(make("strong",t(!valid ? "尚无有效样本" : missing.length ? "样本还不够，结果仅供参考" : "样本已达标，按当前答案判定")),
-                 make("span",uiMessage(report.operational_status),"report-note-status"));
+  heading.append(make("strong",t(running ? "检测中" : !valid ? "尚无有效样本" : missing.length ? "有效样本不足" : "检测明细")));
+  if(!running)heading.append(make("span",uiMessage(report.operational_status),"report-note-status"));
   box.append(heading);
-  if(missing.length)box.append(make("p",t("{count} 项尚未达到最低样本量。",{count:missing.length})));
-  const reasons=(fp.reasons || []).filter(code=>!["samples_incomplete","no_weighted_family"].includes(code));
+  const reasons=running ? [] : (fp.reasons || []).filter(code=>!["samples_incomplete","no_weighted_family"].includes(code));
   if(reasons.length)box.append(make("p",reasons.map(uiMessage).join(" / ")));
   const failures=(report.events || []).filter(event=>event.event==="attempt_decision").reduce((all,event)=>{all[event.code]=(all[event.code]||0)+1;return all;},{});
   if(missing.length || Object.keys(failures).length || report.failure){
-    const details=make("details","");details.append(make("summary",t("查看明细")));
+    details.replaceChildren();details.append(make("summary",t("查看明细")));
     for(const [id,cell] of missing)details.append(make("p",t("{name}：{valid}/{planned}，至少{minimum}",{name:id,valid:cell.valid,planned:cell.planned,minimum:cell.minimum})));
     if(report.failure)details.append(make("p",uiMessage(report.failure)));
     for(const [code,count] of Object.entries(failures))details.append(make("p",uiMessage(code)+" × "+count));
-    if(Object.keys(failures).length)details.append(make("small",t("失败次数包含重试。")));
     box.append(details);
   }
+  box.hidden=running ? !Object.keys(failures).length : !(missing.length || Object.keys(failures).length || report.failure || reasons.length);
 }
 function showReport(report) {
   if (!report.fingerprint) return;
   $("report-placeholder").hidden = true;
   $("verdict").hidden = false;
   $("retention-export").hidden = false;
-  const color = report.fingerprint.color || "yellow";
+  const running=["prepared","running","stopping"].includes(report.operational_status);
+  const color = running ? "running" : report.fingerprint.color || "yellow";
   $("verdict").className = `verdict ${color}`;
-  $("verdict").textContent = report.fingerprint.sample_policy?.version === "60-percent-v1" && report.fingerprint.quality_status !== "sufficient" ? t(report.fingerprint.quality_status === "insufficient_valid_samples" ? "有效请求不足（低于60%）" : "单项有效样本不足（低于60%）") : {green: t("强指向申报模型"), red: t("强指向其他候选模型"), yellow: t("证据不足")}[color];
+  $("verdict").textContent = running ? t("检测中") : report.fingerprint.sample_policy?.version === "60-percent-v1" && report.fingerprint.quality_status !== "sufficient" ? t(report.fingerprint.quality_status === "insufficient_valid_samples" ? "有效样本不足" : "部分题目样本不足") : {green: t("强指向申报模型"), red: t("强指向其他候选模型"), yellow: t("证据不足")}[color];
   renderReportNote(report);
   const sources = [...new Set((report.benchmark.collection.sources || []).map(source => source.url).filter(Boolean))].join(" / ");
-  $("report-summary").textContent = `${t("申报")} ${report.claimed_model} · ${t("实际请求名")} ${report.request_model} · ${t("基准")} ${report.benchmark.id} ${report.benchmark.version}\n` +
+  $("report-summary").textContent = `${t("申报")} ${displayModel(report.claimed_model)} · ${t("实际请求名")} ${report.request_model} · ${t("基准")} ${report.benchmark.id} ${report.benchmark.version}\n` +
     `${t("基准采集网址（API 根地址）")}: ${sources || t("未提供")}\n` +
     `${t("本次检测网址（API 根地址）")}: ${report.endpoint || t("未提供")}\n` +
-    t("仅为候选模型之间的指纹指向，不是身份认证。");
+    `${t("站点分组")}: ${report.site_group || t("未填写")}`;
   $("report").textContent = JSON.stringify(report, null, 2);
+  if (report.progress?.retry_budget !== undefined) $("report-summary").textContent += "\n" + t("重试 {used}/{budget}", {used:report.progress.retries, budget:report.progress.retry_budget});
   if (report.benchmark.publisher !== "maintainer") $("report-summary").textContent += " " + t("本地或社区参考，非维护者认证");
   $("match-bars").replaceChildren();
   for (const [model, score] of Object.entries(report.fingerprint.matches)) {
     const row = document.createElement("div"), label = document.createElement("span"), bar = document.createElement("progress"), value = document.createElement("strong");
-    row.className = "match-row"; label.textContent = model; bar.max = 1; bar.value = score;
-    bar.setAttribute("aria-label", model);
+    row.className = "match-row"; label.textContent = displayModel(model); bar.max = 1; bar.value = score;
+    bar.setAttribute("aria-label", displayModel(model));
     value.textContent = `${(score * 100).toFixed(3)}%`;
     const threshold = report.fingerprint.thresholds?.[model], line = document.createElement("small");
     line.textContent = Number.isFinite(threshold) ? t("强指向线 {value}%", {value: (threshold * 100).toFixed(3)}) : t("未校准");
@@ -182,7 +193,7 @@ function showReport(report) {
     row.append(label, bar, value); $("match-bars").append(row);
   }
   const note = document.createElement("p"); note.className = "match-disclaimer";
-  note.textContent = t("匹配度与强指向线都不是身份概率。仅一个模型严格越线且样本达标时，才给出强指向；显示值有四舍五入。"); $("match-bars").append(note);
+  note.textContent = t("匹配度不是身份概率，结果仅供参考。"); $("match-bars").append(note);
 }
 
 function renderHistory() {
@@ -191,7 +202,10 @@ function renderHistory() {
     const row = document.createElement("div");
     row.className = "package-row";
     const open = document.createElement("button");
-    open.textContent = `${session.created_at} · ${session.claimed_model} · ${uiMessage(session.status)} · ${session.successful}/${session.planned}`;
+    const running=["prepared","running","stopping"].includes(session.status);
+    open.textContent = `${session.created_at} · ${displayModel(session.claimed_model)} · ${running ? t("检测中") : uiMessage(session.status)} · `+
+      t("已处理 {done}/{planned} · 有效样本 {valid}/{planned}",{done:session.logical_completed,valid:session.valid_samples,planned:session.planned})+` · ${t("站点分组")}: ${session.site_group || t("未填写")}`;
+    if(running)open.className="running";
     open.addEventListener("click", async () => {
       state.followLatest = false;
       state.sessionId = session.session_id;
@@ -218,7 +232,7 @@ function renderHistory() {
 }
 
 function progress(value) {
-  $("progress").textContent = t("{status} · 完成 {done}/{planned} · 有效样本 {valid} · 错误 {errors}", {status: uiMessage(value.status), done: value.logical_completed || 0, planned: value.planned || 0, valid: value.valid_samples || 0, errors: value.errors || 0});
+  $("progress").textContent = t("{status} · 已处理 {done}/{planned} · 有效样本 {valid}/{planned} · 错误 {errors}", {status: uiMessage(value.status), done: value.logical_completed || 0, planned: value.planned || 0, valid: value.valid_samples || 0, errors: value.errors || 0});
   $("meter-bar").style.width = value.planned ? `${Math.round(value.logical_completed / value.planned * 100)}%` : "0%";
 }
 
@@ -275,7 +289,7 @@ $("run-mode").addEventListener("change", () => {
 $("package").addEventListener("change", renderModels);
 $("show-reference-packages").addEventListener("change", render);
 $("tier").addEventListener("change", updateEstimate);
-$("retries").addEventListener("input", updateEstimate);
+$("retry-budget").addEventListener("input", updateEstimate);
 $("endpoint-preset").addEventListener("change", () => {
   const preset = state.snapshot.endpoints.find(item => item.id === $("endpoint-preset").value);
   $("base-url").disabled = Boolean(preset);

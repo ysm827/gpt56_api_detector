@@ -106,8 +106,9 @@ class EndpointPresets:
         self.store.delete_document("endpoint", identity)
 
 
-def estimate_plan(package: dict, tier: str, retries: int = 2) -> dict:
+def estimate_plan(package: dict, tier: str, retries: int = 2, *, retry_budget: int | None = None) -> dict:
     counts = package["tiers"][tier]["counts"]
     total = sum(counts.values())
-    return {"logical_requests": total, "maximum_http_attempts": total * (retries + 1),
+    budget = total * retries if retry_budget is None else retry_budget
+    return {"logical_requests": total, "maximum_http_attempts": total + budget, "retry_budget": budget,
             "cells": counts, "known_price": False, "estimated_usd": None}

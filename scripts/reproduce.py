@@ -19,9 +19,9 @@ def main():
     parser.add_argument('--quick', action='store_true')
     parser.add_argument('--output', type=Path, default=ROOT / 'reproduction')
     args = parser.parse_args()
-    manifest = json.loads((ROOT / 'gpt56_vnext/baselines/v4.5.1/manifest.json').read_text())
+    manifest = json.loads((ROOT / 'gpt56_vnext/baselines/v4.5.2/manifest.json').read_text())
     for item in manifest['packages']:
-        package = load_package((ROOT / 'gpt56_vnext/baselines/v4.5.1' / item['file']).read_bytes())
+        package = load_package((ROOT / 'gpt56_vnext/baselines/v4.5.2' / item['file']).read_bytes())
         if args.mode and package['mode'] != args.mode:
             continue
         for tier, expected in package['calibration']['tiers'].items():
@@ -29,6 +29,10 @@ def main():
                 raise RuntimeError('Calibration binding mismatch: ' + tier)
             if args.check_only:
                 print(package['mode'], tier, 'binding OK')
+                continue
+            if package['engine'].get('virtual_reference_version'):
+                from reproduce_other import reproduce
+                reproduce(package, tier, args.output, args.quick)
                 continue
             folder = args.output / package['mode'] / ('quick' if args.quick else 'full')
             result = calibrate(package['fitted'], package['tiers'][tier]['counts'],

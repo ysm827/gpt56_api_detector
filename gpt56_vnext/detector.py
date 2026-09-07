@@ -7,7 +7,7 @@ from .errors import AppError
 from .executor import FrozenRun, runtime_options
 from .probability_model import SCORING_VERSION, score_counts
 from .simulation import simulation_contract
-from .utils import utc_now
+from .utils import utc_now, normalize_site_group, integer
 
 
 def build_single_jobs(package: dict, tier: str, request_model: str) -> list[dict]:
@@ -20,6 +20,9 @@ def build_single_jobs(package: dict, tier: str, request_model: str) -> list[dict
 def calibration_matches(package: dict, tier: str) -> bool:
     if package["engine"]["scoring_version"] != SCORING_VERSION:
         return False
+    if package['engine'].get('virtual_reference_version') == 1:
+        from .virtual_reference import calibration_matches as reference_matches
+        return reference_matches(package, tier, collection_contract(package))
     result = package["calibration"].get("tiers", {}).get(tier, {})
     if result.get("status") != "target_met" or result.get("thresholds") != package["tiers"][tier]["thresholds"]:
         return False
@@ -40,6 +43,8 @@ class DetectorSession:
         models = [model["id"] for model in self.package["models"]]
         claimed = config.get("claimed_model")
         alias = config.get("request_model", claimed)
+        if alias == 'reference-only:other':
+            raise AppError('virtual_reference_not_requestable')
         if tier not in TIERS or claimed not in models or not isinstance(alias, str) or not alias.strip() or len(alias) > 256:
             raise AppError("invalid_detection_configuration")
         self.config = {"kind": "detection", "mode": self.package["mode"], "package": self.package,
@@ -48,6 +53,12 @@ class DetectorSession:
                        "runtime": runtime_options(config.get("runtime", {}))}
         if "sample_ratio" in config:
             self.config["sample_ratio"] = config["sample_ratio"]
+        if "version" in config:
+            self.config["version"] = config["version"]
+        if 'retry_budget' in self.config['runtime']:
+            integer(self.config['runtime']['retry_budget'], 'retry_budget', 0, sum(self.package['tiers'][tier]['counts'].values())*10)
+        if "site_group" in config:
+            self.config["site_group"] = normalize_site_group(config["site_group"])
         self.config["benchmark_publisher"] = config.get("benchmark_publisher", "local")
         jobs = build_single_jobs(self.package, tier, alias)
         self.runner = FrozenRun(store, session_id, self.config, jobs, key, transport=transport)
@@ -72,15 +83,18 @@ class DetectorSession:
                                    calibrated=calibration_matches(self.package, self.config["tier"]),
                                    claimed_model=self.config["claimed_model"], completion_ratio=self.config.get("sample_ratio", .9))
         progress = self.store.progress(self.session_id)
+        if 'retry_budget' in self.config['runtime']:
+            progress['retry_budget'] = self.config['runtime']['retry_budget']
         if self.runner.failure and 'sample_ratio' not in self.config:
             fingerprint.update({"verdict": "insufficient", "color": "yellow", "model": None,
                                 "reasons": sorted(set([*fingerprint["reasons"], self.runner.failure]))})
-        return {"schema_version": 1, "product": "meow LLM Detector", "version": "4.5.1" if "sample_ratio" in self.config else "4.5.0",
+        return {"schema_version": 1, "product": "meow LLM Detector", "version": self.config.get("version", "4.5.1" if "sample_ratio" in self.config else "4.5.0"),
                 "session_id": self.session_id, "updated_at": utc_now(), "operational_status": progress["status"],
                 "failure": self.runner.failure,
                 "fingerprint": fingerprint, "progress": progress, "mode": self.package["mode"],
                 "tier": self.config["tier"], "claimed_model": self.config["claimed_model"],
                 "request_model": self.config["request_model"], "endpoint": self.runner.base_url,
+                "site_group": self.config.get("site_group", ""),
                 "benchmark": {"id": self.package["id"], "version": self.package["version"],
                               "publisher": self.config["benchmark_publisher"],
                               "content_sha256": self.package["content_sha256"], "collection": self.package["collection"],

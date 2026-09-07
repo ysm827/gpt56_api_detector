@@ -29,7 +29,7 @@ class ReleaseTests(unittest.TestCase):
 
     def test_offline_bundles_requests_and_invalid_gate(self):
         with tempfile.TemporaryDirectory() as folder:
-            catalog = BenchmarkCatalog(Path(folder), ROOT / 'gpt56_vnext/baselines/v4.5.1')
+            catalog = BenchmarkCatalog(Path(folder), ROOT / 'gpt56_vnext/baselines/v4.5.2')
             for item in catalog.local():
                 self.assertEqual(item['publisher'], 'maintainer')
                 package = catalog.get(item['id'], item['version'])
@@ -41,7 +41,7 @@ class ReleaseTests(unittest.TestCase):
                     self.assertNotIn('tools', payload)
                     self.assertTrue(payload['stream'])
                 for tier in package['tiers'].values():
-                    self.assertIn(sum(tier['counts'].values()), (20, 50, 100))
+                    self.assertIn(sum(tier['counts'].values()), (40,80,120) if package['mode']=='claude' else (20,40,60))
                     counts = {identity: {'__INVALID_OUTPUT__': n} for identity, n in tier['counts'].items()}
                     self.assertEqual(score_counts(package['fitted'], counts, tier['counts'], tier['thresholds'])['color'], 'yellow')
 

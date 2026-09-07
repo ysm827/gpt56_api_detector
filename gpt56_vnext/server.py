@@ -20,13 +20,14 @@ from .detector import DetectorSession
 from .directory_lock import exclusive_directory
 from .transport import AsyncTransport
 from .errors import AppError, RequestError
-from .executor import runtime_options
+from .executor import runtime_options, detection_options
 from .generator import COLLECTION_WINDOW_GAP_SECONDS, ProbeGeneratorSession, analyze_reports, calibrate_package, collection_contract, merge_windows, selected_project
 from .presets import EndpointPresets, estimate_plan
 from .schedule import SingleRunSchedule
 from .store import SQLiteStateStore
 from .updates import ProgramUpdates
-from .utils import canonical_json, integer, normalize_api_base_url, recognized_provider, strict_json_loads
+from .utils import canonical_json, integer, normalize_api_base_url, recognized_provider, strict_json_loads, normalize_site_group
+from .security import SecretGuard
 
 WEB_ROOT = Path(__file__).with_name("web")
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
@@ -48,7 +49,7 @@ class AppState:
             self.store = SQLiteStateStore(self.root / "state.sqlite3")
             resources.callback(self.store.close)
             self.store.interrupt_active_sessions()
-            self.catalog = BenchmarkCatalog(self.root / "benchmarks", Path(__file__).with_name("baselines") / "v4.5.1" if bundled else None)
+            self.catalog = BenchmarkCatalog(self.root / "benchmarks", Path(__file__).with_name("baselines") / "v4.5.2" if bundled else None)
             self.presets = EndpointPresets(self.store)
             self.updates = ProgramUpdates(self.root / "updates", self.store)
             self.active = {}
@@ -120,10 +121,14 @@ class AppState:
             config = {**connection, "runtime": body.get("runtime", {})}
             if kind == "detection":
                 config["sample_ratio"] = .6
-            if kind == "detection":
+                config["version"] = "4.5.2"
+                config["site_group"] = body.get("site_group", "")
                 source = self.catalog.get(body.get("package_id"), body.get("package_version"))
                 config["benchmark_publisher"] = next(item["publisher"] for item in self.catalog.local() if item["id"] == source["id"] and item["version"] == source["version"])
                 config.update({"tier": body.get("tier", "low"), "claimed_model": body.get("claimed_model")})
+                if config['tier'] not in source['tiers']:
+                    raise AppError('invalid_detection_configuration')
+                config['runtime'] = detection_options(body.get('runtime', {}), sum(source['tiers'][config['tier']]['counts'].values()))
                 if not config.get("request_model"):
                     config["request_model"] = body.get("claimed_model")
             else:
@@ -196,13 +201,17 @@ class AppState:
         if detection.get("claimed_model") not in {model["id"] for model in package["models"]} or detection.get("tier", "low") not in package["tiers"]:
             raise AppError("invalid_detection_configuration")
         previous = self.store.document("schedule", "active")
-        runtime = runtime_options(detection.get("runtime", {}))
+        runtime = detection_options(detection.get("runtime", {}), sum(package['tiers'][detection.get('tier', 'low')]['counts'].values()))
+        site_group = normalize_site_group(detection.get("site_group", ""))
+        schedule_key = self.presets.vault.load(endpoint["credential_ref"])
+        SecretGuard([schedule_key]).check(site_group, code="credential_in_configuration")
         reference = uuid.uuid4().hex
-        self.presets.vault.save(reference, self.presets.vault.load(endpoint["credential_ref"]))
+        self.presets.vault.save(reference, schedule_key)
         endpoint = {**endpoint, "credential_ref": reference, "schedule_owned": True}
         frozen = {"package_id": package["id"], "package_version": package["version"],
                   "package_sha256": package["content_sha256"], "endpoint_snapshot": endpoint,
                   "claimed_model": detection.get("claimed_model"),
+                  "site_group": site_group,
                   "request_model": detection.get("request_model") or endpoint["model"],
                   "tier": detection.get("tier", "low"), "runtime": runtime}
         try:
@@ -235,7 +244,7 @@ class AppState:
                 "schedule": self.schedule.status(), "calibration": self.calibration}
 
     def snapshot(self):
-        return {**self.status(), "version": "4.5.1", "brand": "meow LLM Detector", "packages": self.catalog.local(),
+        return {**self.status(), "version": "4.5.2", "brand": "meow LLM Detector", "packages": self.catalog.local(),
                 "endpoints": self.presets.list(), "projects": self.store.documents("project"), "catalog": self.catalog.index()}
 
     @staticmethod
@@ -375,7 +384,7 @@ class Handler(BaseHTTPRequestHandler):
                 name, content_type = ASSETS[path]
                 self._send((WEB_ROOT / name).read_bytes(), content_type=content_type, bootstrap=path == "/")
             elif path == "/api/bootstrap":
-                self._send({"token": self.server.token, "version": "4.5.1", "locale": self.server.state.locale, "seed_pool": seed_summary(), "tier_defaults": DEFAULT_TIER_COUNTS}, bootstrap=True)
+                self._send({"token": self.server.token, "version": "4.5.2", "locale": self.server.state.locale, "seed_pool": seed_summary(), "tier_defaults": DEFAULT_TIER_COUNTS}, bootstrap=True)
             elif path == "/api/snapshot":
                 self._send(self.server.state.snapshot())
             elif path == "/api/status":
@@ -445,7 +454,10 @@ class Handler(BaseHTTPRequestHandler):
                 result = state.call(state.stop_run(body.get("session_id")))
             elif path == "/api/run/estimate":
                 package = state.catalog.get(body.get("package_id"), body.get("package_version"))
-                result = estimate_plan(package, body.get("tier", "low"), runtime_options(body.get("runtime", {}))["retries"])
+                tier = body.get('tier', 'low')
+                if tier not in package['tiers']:raise AppError('invalid_detection_configuration')
+                runtime = detection_options(body.get('runtime', {}), sum(package['tiers'][tier]['counts'].values()))
+                result = estimate_plan(package, tier, retry_budget=runtime['retry_budget'])
             elif path == "/api/project/save":
                 result = normalize_project(body.get("project"), draft=True)
                 selected = body.get("selected", body.get("project", {}).get("selected"))

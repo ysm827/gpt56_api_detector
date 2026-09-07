@@ -103,6 +103,10 @@ def normalize_project(value: Any, *, draft: bool = False, _legacy=False) -> dict
         project["models"].append({"id": identifier(model.get("id"), "model_id"),
                                   "name": text(model.get("name", model.get("id")), "name", limit=512),
                                   "request_model": text(model.get("request_model", model.get("id")), "request_model", limit=256)})
+        if 'reference_only' in model:
+            if model['reference_only'] is not True or model.get('request_model') != 'reference-only:other':
+                raise AppError('invalid_virtual_reference')
+            project['models'][-1]['reference_only'] = True
     model_ids = [model["id"] for model in project["models"]]
     if len(set(model_ids)) != len(model_ids):
         raise AppError("duplicate_model")
@@ -166,6 +170,10 @@ def normalize_project(value: Any, *, draft: bool = False, _legacy=False) -> dict
                            "created_at": text(metadata.get("created_at", utc_now()), "created_at", limit=64)}
     project["engine"] = {"minimum_version":"4.5.0", "scoring_version":"meow-fingerprint-v1" if _legacy else SCORING_VERSION,
                          "smoothing_alpha":0.5, "completion_ratio":0.9}
+    if any(m.get('reference_only') for m in project['models']):
+        if _legacy:
+            raise AppError('unsupported_engine')
+        project['engine'].update(minimum_version='4.5.2', virtual_reference_version=1)
     accepted_engine = dict(project["engine"], scoring_version="meow-fingerprint-v1")
     if "engine" in value and value["engine"] not in (project["engine"], accepted_engine):
         raise AppError("unsupported_engine")
@@ -237,6 +245,11 @@ def build_package(project: dict, observations: dict, *, collection: dict | None 
             raise AppError("source_url_requires_sanitization")
         if source.get("provider") == "openrouter" and recognized_provider(original) != "openrouter":
             raise AppError("source_provider_mismatch")
+    if any(m.get('reference_only') for m in package['models']):
+        from .virtual_reference import fit_reference
+        package['fitted'] = fit_reference(package, observations, cells, package['collection'])
+    elif 'virtual_reference' in package['collection']:
+        raise AppError('invalid_virtual_reference')
     package["calibration"] = deepcopy(calibration or {"status":"not_calibrated"})
     package["validation"] = deepcopy(validation or {"status":"not_independently_validated"})
     if not isinstance(package["calibration"], dict) or not isinstance(package["validation"], dict):

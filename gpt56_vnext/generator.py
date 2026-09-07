@@ -19,6 +19,8 @@ COLLECTION_WINDOW_GAP_SECONDS = 60
 
 
 def collection_jobs(project: dict, samples: int, window: int, seed: int = 45001, probe_ids=None) -> list[dict]:
+    if any(m.get('reference_only') or m.get('request_model') == 'reference-only:other' for m in project['models']):
+        raise AppError('virtual_reference_read_only')
     integer(samples, "samples_per_model_per_cell", 1, 1000)
     cells = cells_by_id(project)
     if probe_ids is not None:
@@ -192,6 +194,8 @@ def selected_project(project: dict, selected: list[str], tiers: dict | None = No
 
 def calibrate_package(project: dict, observations: dict, collection: dict, options: dict,
                       *, checkpoint_root=None, cancel=None, progress=None) -> dict:
+    if any(m.get('reference_only') for m in project['models']):
+        raise AppError('virtual_reference_read_only')
     cells = cells_by_id(project)
     observations = {identity: value for identity, value in observations.items() if identity in cells}
     package = build_package(project, observations, collection=collection)
