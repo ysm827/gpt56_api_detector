@@ -4,11 +4,24 @@ Version 4.5.2 supports six-probe baselines with an Other reference and a 98% thr
 
 [中文](README_CN.md) · [Download](https://github.com/chen-006/meow-llm-detector/releases/latest)
 
-Download and extract the English ZIP. On Windows, double-click `start.bat`; on macOS / Linux, run `sh start.sh` inside the folder. Install Python 3.11 or newer first. The launcher asks before installing dependencies. In the browser, choose a model, enter your API URL and key, and click Start.
+## Download And Start
+
+**Windows 10 / 11, Intel / AMD 64-bit: use the portable archive. No Python installation required.**
+
+| Package | Chinese | English |
+|---|---|---|
+| Windows x64 portable (recommended) | [Portable zh-CN](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-windows-x64-portable-zh-CN.zip) | [Portable en](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-windows-x64-portable-en.zip) |
+| Source / macOS / Linux | [Source zh-CN](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-zh-CN.zip) | [Source en](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-en.zip) |
+
+Portable archives include Python 3.13.15 and dependencies. **Extract the entire archive to a new folder, then run `start.bat`.** Source archives require Python 3.11+; run `start.bat` on Windows or `sh start.sh` on macOS / Linux. The source launcher asks before installing dependencies. Model API calls and update checks require a network connection.
+
+If the browser does not open, visit [http://127.0.0.1:8765/](http://127.0.0.1:8765/). Data is stored in `meow_runs`; stop the old backend before migration. Explicitly saved connection keys use the OS credential store and do not move to another computer with the folder. Temporary keys are not persisted.
+
+Startup checks recommend newer program and baseline versions without automatic installation. See the included README for usage and [SHA256SUMS.txt](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/SHA256SUMS.txt) for download checksums.
 
 Research reference: [One Token Is Enough](https://arxiv.org/abs/2607.10252). Community links: [Linux.do discussion](https://linux.do/t/topic/2704354) · [Routing discussion](https://linux.do/t/topic/2728901). Implementation inspiration and thanks: [hlwy-ai-checker](https://github.com/hanlinwenyuan/hlwy-ai-checker).
 
-## Changes in 4.5.1
+## History: Changes in 4.5.1
 
 Web version: https://meowllm.top
 

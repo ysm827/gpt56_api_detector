@@ -6,11 +6,24 @@
 
 网页版：https://meowllm.top
 
-下载中文包并解压，Windows 双击 `start.bat`；macOS / Linux 在文件夹里运行 `sh start.sh`。需要 Python 3.11 或更新版本，首次启动会询问是否安装依赖。页面打开后，选模型、填 API 地址和 key，点“开始检测”即可。
+## 下载与启动
+
+**Windows 10 / 11，Intel / AMD 64 位：推荐便携包，无需安装 Python。**
+
+| 系统 / 用途 | 中文下载 | 英文下载 |
+|---|---|---|
+| Windows 64 位便携包（推荐） | [windows-x64-portable-zh-CN.zip](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-windows-x64-portable-zh-CN.zip) | [windows-x64-portable-en.zip](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-windows-x64-portable-en.zip) |
+| 源码包 / macOS / Linux | [v4.5.2-zh-CN.zip](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-zh-CN.zip) | [v4.5.2-en.zip](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-en.zip) |
+
+便携包内置 Python 3.13.15 和依赖，**完整解压到新文件夹后双击 `start.bat`**，无需另装 Python 或首次安装依赖。源码包需要 Python 3.11+；Windows 运行 `start.bat`，macOS / Linux 运行 `sh start.sh`，首次启动会询问是否安装依赖。调用模型 API 和检查更新仍需网络。
+
+浏览器未自动打开时访问 [http://127.0.0.1:8765/](http://127.0.0.1:8765/)。数据位于 `meow_runs`，迁移前先关闭旧后台。主动保存的连接密钥位于系统凭据库，不随文件夹迁移到另一台电脑；临时 Key 不作持久保存。
+
+页面打开后，选模型、填 API 地址和 Key，点“开始检测”。启动时会检查程序和基准更新，有新版本时提示，不自动安装。使用详情见包内 README，下载校验见 [SHA256SUMS.txt](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/SHA256SUMS.txt)。
 
 参考论文：[One Token Is Enough](https://arxiv.org/abs/2607.10252)。友情链接：[Linux.do 讨论](https://linux.do/t/topic/2704354) · [路由现象讨论](https://linux.do/t/topic/2728901)。实现参考与致谢：[hlwy-ai-checker](https://github.com/hanlinwenyuan/hlwy-ai-checker)。
 
-## 4.5.1 变更
+## 历史：4.5.1 变更
 
 默认Claude基准升级为4.5.1-rc1（CL045替换CL039），GPT不变。各题按轮转顺序派发；停止后样本达标仍按同一规则判定。多响应流只采用最后响应ID，末段无效则在预算内重试。
 
