@@ -2,6 +2,26 @@
   "schema_version": 1,
   "packages": [
     {
+      "id": "meow-gpt-other-cap98",
+      "version": "4.5.3-predictive.2",
+      "mode": "gpt",
+      "content_sha256": "00846ce198b9366fadbabc0bb4b9c5f002ec84dc49a27cba3d8f9b33218fac3c",
+      "publisher": "maintainer",
+      "path": "benchmarks/official/meow-gpt-other-cap98--4.5.3-predictive.2.meow.json",
+      "sha256": "6c81ef5de35d2c87a899e9a2430def693404ffa8afe6b3bb0b88e9f02f6cdc08",
+      "minimum_program_version": "4.5.3"
+    },
+    {
+      "id": "meow-claude-other-cap98",
+      "version": "4.5.3-predictive.2",
+      "mode": "claude",
+      "content_sha256": "602c0b550f9f3b55f8a4010a9ca673c5c62f7d1bd6a8d955134aa62397e008f0",
+      "publisher": "maintainer",
+      "path": "benchmarks/official/meow-claude-other-cap98--4.5.3-predictive.2.meow.json",
+      "sha256": "7a9877bb432b66c1371a7131807ed3b2601c1137724476db159909df4a2d12d0",
+      "minimum_program_version": "4.5.3"
+    },
+    {
       "id": "meow-claude-other-cap98",
       "version": "4.5.2-other-cap98.2",
       "mode": "claude",

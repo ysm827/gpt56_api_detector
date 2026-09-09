@@ -1,6 +1,8 @@
 // One interface and one translation catalog; benchmark prompts are never translated.
 let locale = document.documentElement.lang === "en" ? "en" : "zh-CN";
 const english = {
+  "新旧分数说明 ↗":"Old and new scores ↗",
+  "新版评分旨在提高识别准确性、减少匹配度波动。强指向线已重新校准，通常更低；新旧分数不宜直接比较。":"Updated scoring aims to improve identification and reduce score swings. Thresholds have been recalibrated and are generally lower; old and new scores are not directly comparable.",
   "停止本地服务":"Stop local service",
   "停止本地服务？历史报告会保留。":"Stop the local service? Saved reports will be kept.",
   "本地服务已停止，下次运行启动器即可打开。":"Local service stopped. Run the launcher to open it again.",
@@ -300,6 +302,7 @@ const messages = {
   response_incomplete: ["上游回答未完整结束", "The upstream response did not finish completely"],
   response_too_large: ["上游响应超过大小限制", "The upstream response exceeds the size limit"],
   truncated_stream: ["流式响应中途结束", "The stream ended early"],
+  unexpected_response: ["未收到模型响应，请检查 API 地址与返回格式", "No model response; check the API URL and response format"],
   unexpected_tool: ["上游返回了工具调用，但探针只接受文本答案", "The upstream returned a tool call; probes require text answers"],
   unsupported_parameter: ["这个请求协议不支持所填参数", "This request protocol does not support the supplied parameter"],
   unsupported_effort: ["该请求不支持此思考强度配置", "This request does not support the chosen reasoning setting"],
@@ -412,6 +415,8 @@ function translatePage(language) {
   locale = language === "en" ? "en" : "zh-CN";
   document.documentElement.lang = locale;
   if (locale !== "en") return;
+  const scoreLink = document.querySelector('.score-scale-link');
+  if (scoreLink) scoreLink.href = 'https://github.com/chen-006/meow-llm-detector/blob/main/README_EN.md#comparing-old-and-new-scores';
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   while (walker.nextNode()) {
     const node = walker.currentNode;

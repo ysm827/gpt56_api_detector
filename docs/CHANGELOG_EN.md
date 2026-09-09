@@ -1,4 +1,4 @@
-# 4.5.3 (pre-release acceptance)
+# 4.5.3
 
 - Detection/history share one page with unified purple styling, themes, typography, expansion state and mobile scrolling.
 - Both sides search URLs/models, fetch site model lists and default to relay-style Claude aliases.
@@ -8,4 +8,4 @@
 - Agent tasks/CLI replace the old generator UI, adding data partitions, whole-path calibration, source-out checks, settled/persistent budgets and validated export.
 - Official packages support staged updates, task waiting, restart verification and rollback; unlisted code and owned-process cleanup checks are repaired.
 
-Entering from4.5.2 requires the new launcher once, preserving old directories/data. GPT uses36/72/108 requests; Claude60/90/120. Final release awaits local acceptance; GitHub Release and production have not been replaced.
+Entering from4.5.2 requires the new launcher once, preserving old directories/data. GPT uses36/72/108 requests; Claude60/90/120. Scores and thresholds are recalibrated and are not directly comparable with old percentages; see the technical report for limitations.

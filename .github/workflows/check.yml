@@ -31,7 +31,11 @@ jobs:
         if: always()
         with:
           name: source-acceptance-${{ matrix.os }}
-          path: acceptance-results
+          path: |
+            acceptance-results/**/result.json
+            acceptance-results/**/launcher.log
+            dist/*
+          retention-days: 7
   portable:
     runs-on: windows-latest
     steps:
@@ -48,5 +52,7 @@ jobs:
         with:
           name: portable-acceptance
           path: |
-            acceptance-results
-            dist
+            acceptance-results/**/result.json
+            acceptance-results/**/launcher.log
+            dist/*
+          retention-days: 7

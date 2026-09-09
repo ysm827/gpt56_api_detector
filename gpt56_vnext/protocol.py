@@ -1,7 +1,7 @@
 from copy import deepcopy
 import math
 from typing import Any
-from .errors import AppError, RequestError, upstream_detail
+from .errors import AppError, RequestError, upstream_detail, http_error_detail
 from .security import SecretGuard
 from .utils import integer, finite_number, strict_json_loads
 
@@ -301,6 +301,11 @@ def parse_stream(decoded: str, mode: str, guard: SecretGuard) -> dict:
                 data_lines.append(line[5:].removeprefix(" "))
         if data_lines:
             raise RequestError("truncated_stream")
+        if not events and decoded.strip():
+            guard.check(decoded)
+            raise RequestError("unexpected_response", evidence={
+                "local": {"source": "protocol", "type": "UnexpectedResponse"},
+                "upstream": http_error_detail(decoded, guard)})
         for event in events:
             parser.feed(event)
         return parser.finish()

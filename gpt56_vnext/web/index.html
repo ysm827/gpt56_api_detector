@@ -7,6 +7,7 @@
 <div id="startup-updates" class="startup-updates" role="status" hidden><span id="global-update-status">有更新可用</span><button id="startup-program-update" hidden>更新程序</button><button id="startup-baseline-update" hidden>更新基准</button></div>
 <main class="app-content"><div id="detect-view" class="workspace">
 <div class="page-heading"><div><p class="eyebrow">MODEL FINGERPRINT</p><h1>模型检测</h1></div><span class="page-context">连接 · 检测 · 查看结果</span></div>
+<p class="scoring-update context-note">新版评分旨在提高识别准确性、减少匹配度波动。强指向线已重新校准，通常更低；新旧分数不宜直接比较。 <a class="score-scale-link" href="https://github.com/chen-006/meow-llm-detector#新旧版分数参考" target="_blank" rel="noopener noreferrer">新旧分数说明 ↗</a></p>
 <div class="workbench-grid">
 <aside class="setup-panel panel"><div class="panel-heading"><h2>开始检测</h2><span class="step-badge">01</span></div><form id="detect-form">
 <div class="mode-cards" role="group" aria-label="模型系列"><button type="button" data-mode="gpt" aria-pressed="true">GPT</button><button type="button" data-mode="claude" aria-pressed="false">Claude</button><button type="button" data-mode="chat" aria-pressed="false">other</button></div>
@@ -14,12 +15,13 @@
 <details class="saved-connection"><summary>使用保存的连接</summary><select id="endpoint-preset" aria-label="使用已保存的 API 连接"><option value="">仅本次手动输入</option></select></details>
 <label>API 地址<input id="base-url" placeholder="https://api.example.com/v1" autocomplete="off"></label>
 <label>API Key<input id="key" type="password" placeholder="仅本页临时使用" autocomplete="off"></label>
+<button type="button" id="save-current-connection" class="text-button">保存连接</button>
 <label>你想验证的模型<select id="claimed"></select></label>
 <label for="request-model">实际请求模型</label><div class="input-action"><input id="request-model" list="supported-models" placeholder="服务商的模型名" autocomplete="off"><button id="fetch-models" type="button" title="获取站点支持的模型">获取模型</button></div><datalist id="supported-models"></datalist><p id="models-notice" class="field-notice" role="status"></p>
 <label>站点分组 <small>选填，建议填写</small><input id="site-group" maxlength="80" placeholder="未填写" autocomplete="off"></label>
 <div class="settings-divider"></div>
 <label>检测档位<select id="tier"><option value="low">快速</option><option value="medium">标准</option><option value="high">深入</option></select></label>
-<details class="inline-options"><summary>基准与连接选项</summary><label>基准<select id="package"></select></label><label class="check"><input id="show-reference-packages" type="checkbox">显示本地或社区参考基准</label><label class="check"><input id="allow-http" type="checkbox">允许明文 HTTP（仅可信网络，Key 不加密）</label><div id="benchmark-note" class="context-note"></div><button type="button" id="save-current-connection" class="text-button">保存连接</button></details>
+<details class="inline-options"><summary>基准与连接选项</summary><label>基准<select id="package"></select></label><label class="check"><input id="show-reference-packages" type="checkbox">显示本地或社区参考基准</label><label class="check"><input id="allow-http" type="checkbox">允许明文 HTTP（仅可信网络，Key 不加密）</label><div id="benchmark-note" class="context-note"></div></details>
 <details class="advanced-panel inline-options"><summary><span>高级设置</span><small>并发、重试与定时检测</small></summary>
 <div class="grid"><label>并发<input id="workers" type="number" min="1" max="32" value="8"></label><label>整次检测重试预算<input id="retry-budget" type="number" min="0" placeholder="默认请求数的50%"><small>留空按计划请求数的50%设置；填0不重试。</small></label></div>
 <div class="grid"><label>执行方式<select id="run-mode"><option value="once">立即单次</option><option value="scheduled">定时独立单次</option></select></label><div id="schedule-controls" class="wide grid" hidden><label>轮间隔（分钟）<input id="schedule-minutes" type="number" min="1" value="60"></label><label>最多轮数（留空至手动停止）<input id="schedule-rounds" type="number" min="1"></label></div></div><p id="schedule-help" class="muted" hidden>定时检测需保存 API 连接，关闭网页不会停止计划。</p>

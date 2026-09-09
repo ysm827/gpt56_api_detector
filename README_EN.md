@@ -9,13 +9,28 @@ Compare model behavior using distributions of answers to short probes. Fingerpri
 - The default address is http://127.0.0.1:8765/ . Pass `--port 8790` for a different port.
 - The [website](https://meowllm.top/) requires no installation; reports are public and upstream APIs must use public HTTPS.
 
-Use [GitHub Releases](https://github.com/chen-006/meow-llm-detector/releases) for official downloads. A 4.5.3 acceptance build is not a published release.
+Use [GitHub Releases](https://github.com/chen-006/meow-llm-detector/releases/tag/v4.5.3) for official downloads; temporary acceptance-branch builds are not official release assets.
 
 ## First detection
 
 Choose a protocol, enter URL/Key or select a saved connection, choose a baseline and claimed model, then review the request budget and start. Fetch the site's model list to fill the request alias, or enter it manually. API charges belong to your account. Search history by URL, claimed model or request alias.
 
 Claude aliases default to relay-style hyphens such as `claude-fable-5-1`; OpenRouter retains its precise alias. Model-list entries are not identity evidence.
+
+## Comparing old and new scores
+
+Updated scoring accumulates valid-answer evidence and displays its average advantage, reducing sensitivity to small samples. Thresholds are recalibrated and are generally lower. **A lower displayed score does not mean weaker identification. Use the current threshold; do not directly compare percentages across versions.**
+
+For a simplified scale example, ignore differences in fitting and assume two candidates and six independent, equally weighted evidence terms, each with average advantage δ. An old-style summed scale would be approximately `sigmoid(6δ)`; the new average scale approximately `sigmoid(δ)`.
+
+| Average advantage δ | Illustrative old scale | Illustrative new scale |
+|---|---:|---:|
+| 0.4 | 91.68% | 59.87% |
+| 0.8 | 99.18% | 69.00% |
+| 1.2 | 99.93% | 76.85% |
+| 2.3 | about 99.9999% | 90.89% |
+
+This illustrates display scale only: it is not a conversion formula for real reports, an accuracy rate or an identity probability. Actual fitting, request counts, candidate/family structure and thresholds also differ. See the [technical report](TECHNICAL_REPORT_EN.md).
 
 ## Updates and migration
 
