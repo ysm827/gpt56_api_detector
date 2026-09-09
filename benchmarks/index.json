@@ -2,6 +2,26 @@
   "schema_version": 1,
   "packages": [
     {
+      "id": "meow-gpt-other-cap98-efficient",
+      "version": "4.5.3-efficiency.rc1",
+      "mode": "gpt",
+      "content_sha256": "67a410ab169b2f997ec208cd1f01d03aa6870d647c0337c187f63fb11e4954d7",
+      "publisher": "maintainer",
+      "path": "benchmarks/official/meow-gpt-other-cap98-efficient--4.5.3-efficiency.rc1.meow.json",
+      "sha256": "ae576dfc4487dcc70f9f56b629762c5f9ac596fd3848708cf2667f407fb04d6a",
+      "minimum_program_version": "4.5.3"
+    },
+    {
+      "id": "meow-claude-other-cap98-efficient",
+      "version": "4.5.3-efficiency.rc1",
+      "mode": "claude",
+      "content_sha256": "d03ce3752d3304aeaf0258cc1b5f302b90a49cb66a23096f32ae0ba3124fe18a",
+      "publisher": "maintainer",
+      "path": "benchmarks/official/meow-claude-other-cap98-efficient--4.5.3-efficiency.rc1.meow.json",
+      "sha256": "9788bb84bbf20947d8c0ee4fa31ce172d3fc109fab788e06136cfc87efd018cf",
+      "minimum_program_version": "4.5.3"
+    },
+    {
       "id": "meow-gpt-other-cap98",
       "version": "4.5.3-predictive.2",
       "mode": "gpt",
