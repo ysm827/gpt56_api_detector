@@ -1,5 +1,6 @@
 """Deterministic, source-only bilingual ZIP builder; no private-directory fallback."""
 import argparse
+import ast
 import hashlib
 import json
 from pathlib import Path
@@ -11,12 +12,25 @@ ROOT_FILES = ['README.md', 'README_CN.md', 'README_EN.md', 'TECHNICAL_REPORT_CN.
               '.gitignore', '.gitattributes', 'CONTRIBUTING.md', 'CONTRIBUTING_EN.md']
 
 
+def package_info(root):
+    tree = ast.parse((root / 'gpt56_vnext/__init__.py').read_text(encoding='utf-8'))
+    values = {target.id: ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
+              for target in node.targets if isinstance(target, ast.Name)}
+    version, baseline = values['__version__'], values['BUNDLED_BASELINES']
+    if (root / 'VERSION').read_text().strip() != version:
+        raise ValueError('VERSION does not match the runtime')
+    if Path(baseline).name != baseline:
+        raise ValueError('Invalid bundled baseline directory')
+    return version, baseline
+
+
 def release_files(root=ROOT):
+    _, baseline_version = package_info(root)
     paths = set(root / name for name in ROOT_FILES)
     paths.update((root / 'gpt56_vnext').glob('*.py'))
-    for folder in ('web', 'assets'):
-        paths.update(path for path in (root / 'gpt56_vnext' / folder).iterdir() if path.is_file())
-    baseline = root / 'gpt56_vnext/baselines/v4.5.2'
+    for folder in ('web', 'assets', 'agent_kit'):
+        paths.update(path for path in (root / 'gpt56_vnext' / folder).rglob('*') if path.is_file())
+    baseline = root / 'gpt56_vnext/baselines' / baseline_version
     manifest = baseline / 'manifest.json'
     paths.add(manifest)
     for item in json.loads(manifest.read_text())['packages']:
@@ -41,8 +55,32 @@ def release_files(root=ROOT):
     return result
 
 
+def installation_files(files, version, locale, kind='source'):
+    content = dict(files)
+    content.pop('MEOW_INSTALL.json', None)
+    content.pop('SHA256SUMS.txt', None)
+    content['locale.json'] = (json.dumps({'locale': locale}) + '\n').encode()
+    manifest = {'schema': 1, 'version': version, 'kind': kind, 'locale': locale,
+                'files': {p: hashlib.sha256(data).hexdigest() for p, data in sorted(content.items())}}
+    content['MEOW_INSTALL.json'] = (json.dumps(manifest, indent=2) + '\n').encode()
+    content['SHA256SUMS.txt'] = ''.join(f'{hashlib.sha256(data).hexdigest()}  {path}\n'
+                                     for path, data in sorted(content.items())).encode()
+    return content
+
+
+def write_archive(target, content):
+    if target.exists():
+        raise FileExistsError(target)
+    with zipfile.ZipFile(target, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+        for path, data in sorted(content.items()):
+            info = zipfile.ZipInfo(target.stem + '/' + path, date_time=(2026, 9, 9, 0, 0, 0))
+            info.create_system = 3
+            info.external_attr = (0o100755 if path.endswith('.sh') else 0o100644) << 16
+            archive.writestr(info, data, compress_type=zipfile.ZIP_DEFLATED, compresslevel=6)
+
+
 def build(output, root=ROOT):
-    version = (root / 'VERSION').read_text().strip()
+    version, _ = package_info(root)
     output.mkdir(parents=True, exist_ok=True)
     files = release_files(root)
     checksums = []
@@ -50,17 +88,9 @@ def build(output, root=ROOT):
         name = f'meow-llm-detector-v{version}-{locale}'
         content = dict(files)
         content['README.md'] = files['README_EN.md' if locale == 'en' else 'README_CN.md']
-        content['locale.json'] = (json.dumps({'locale': locale}) + '\n').encode()
-        content['SHA256SUMS.txt'] = ''.join(f'{hashlib.sha256(data).hexdigest()}  {path}\n' for path, data in sorted(content.items())).encode()
+        content = installation_files(content, version, locale)
         target = output / (name + '.zip')
-        if target.exists():
-            raise FileExistsError(target)
-        with zipfile.ZipFile(target, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
-            for path, data in sorted(content.items()):
-                info = zipfile.ZipInfo(name + '/' + path, date_time=(2026, 9, 5, 0, 0, 0))
-                info.create_system = 3
-                info.external_attr = (0o100755 if path.endswith('.sh') else 0o100644) << 16
-                archive.writestr(info, data, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+        write_archive(target, content)
         checksums.append(f'{hashlib.sha256(target.read_bytes()).hexdigest()}  {target.name}\n')
         print(target)
     (output / 'SHA256SUMS.txt').write_text(''.join(checksums), encoding='ascii')

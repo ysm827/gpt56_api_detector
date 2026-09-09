@@ -1,4 +1,4 @@
-"""Check and download a verified release; never replace running code or execute it."""
+"""Check, stage and hand off explicitly requested official application updates."""
 from __future__ import annotations
 
 import asyncio
@@ -7,6 +7,9 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import subprocess
+import sys
+import uuid
 from urllib.parse import urljoin, urlsplit
 
 import httpx
@@ -15,12 +18,13 @@ from . import __version__
 from .catalog import REPOSITORY, download_bytes
 from .errors import AppError
 from .proxies import http_client_options
-from .utils import strict_json_loads, utc_now
+from .utils import strict_json_loads, utc_now, atomic_write_json
+from .installation import metadata, verify, unpack, prepare_environment
 
 MAX_RELEASE_BYTES = 256 * 1024 * 1024
 
 
-def release_info(value: dict, locale: str) -> dict:
+def release_info(value: dict, locale: str, kind='source') -> dict:
     if locale not in {"zh-CN", "en"}:
         raise AppError("unsupported_language")
     tag = value.get("tag_name", "")
@@ -29,7 +33,8 @@ def release_info(value: dict, locale: str) -> dict:
         raise AppError("unsupported_release")
     version = ".".join(match.groups())
     available = tuple(map(int, match.groups())) > tuple(map(int, __version__.split(".")))
-    name = f"meow-llm-detector-v{version}-{locale}.zip"
+    suffix = 'windows-x64-portable-' if kind == 'windows-x64-portable' else ''
+    name = f"meow-llm-detector-v{version}-{suffix}{locale}.zip"
     asset = next((asset for asset in value.get("assets", []) if asset.get("name") == name), None)
     download = None
     if asset:
@@ -41,22 +46,83 @@ def release_info(value: dict, locale: str) -> dict:
     return {"current_version": __version__, "latest_version": version, "available": available,
             "locale": locale, "checked_at": utc_now(), "release_url": f"https://github.com/{REPOSITORY}/releases/tag/{tag}",
             "notes": str(value.get("body") or "")[:16000], "download": download,
-            "installation": "download_only_manual_extract_and_restart"}
+            "installation": "managed_stage_wait_restart", "kind": kind}
 
 
 class ProgramUpdates:
     def __init__(self, root: Path, store):
         self.root, self.store = root, store
         self._download_lock = asyncio.Lock()
+        self.application = Path(__file__).resolve().parent.parent
+        self.launch_root = Path(os.environ.get('MEOW_LAUNCH_ROOT', self.application)).resolve()
+        self.control = Path(os.environ.get('MEOW_UPDATE_CONTROL', self.root / 'control')).resolve()
+        self.operation = None
+        try:
+            self.kind = metadata(self.application)['kind']
+        except AppError:
+            self.kind = 'source'
+        if not os.environ.get('MEOW_UPDATE_CONTROL') and self.busy():
+            self.set_status('failed', message='Interrupted update; current application preserved.')
 
     async def check(self, locale="zh-CN"):
         try:
             raw = await download_bytes(f"https://api.github.com/repos/{REPOSITORY}/releases/latest", 1024 * 1024)
-            info = release_info(strict_json_loads(raw), locale)
+            info = release_info(strict_json_loads(raw), locale, self.kind)
         except (httpx.HTTPError, AppError) as exc:
             raise AppError("update_check_unavailable", status=502) from exc
         self.store.put_document("program_update", locale, info)
         return info
+
+    def status(self):
+        path = self.control / 'status.json'
+        return strict_json_loads(path.read_bytes()) if path.exists() else {'stage': 'idle'}
+
+    def busy(self):
+        return self.status()['stage'] in ('downloading','preparing','waiting','starting')
+
+    def set_status(self, stage, **extra):
+        atomic_write_json(self.control / 'status.json', {'stage':stage, **extra})
+
+    async def install(self, version, locale, state, server):
+        if self.operation and not self.operation.done():
+            return self.status()
+        verify(self.application)
+        self.operation = asyncio.create_task(self._install(version, locale, state, server))
+        return {'stage':'preparing'}
+
+    async def _install(self, version, locale, state, server):
+        saved_schedule = None
+        try:
+            self.set_status('downloading')
+            saved_schedule = state.schedule.status()
+            state.schedule.pause()
+            archive = await self.download(version, locale)
+            self.set_status('preparing')
+            stage = self.launch_root / '.meow-versions' / (version + '-' + uuid.uuid4().hex[:8])
+            await asyncio.to_thread(unpack, Path(archive['path']), stage, version, self.kind)
+            await asyncio.to_thread(prepare_environment, stage, self.kind)
+            self.set_status('waiting', message='Waiting for current tasks to finish')
+            while state.active:
+                await asyncio.sleep(.5)
+            if saved_schedule and saved_schedule.get('enabled'):
+                self.store.put_document('settings', 'resume_schedule_after_update', {'resume':True})
+            info = metadata(self.application)
+            job = {'prepared':str(stage),'previous':str(self.application),'previous_version':info['version'],
+                   'version':version,'kind':self.kind,'data':str(state.root),'locale':locale,
+                   'port':server.server_port,'launch_root':str(self.launch_root)}
+            job_path = self.control / 'job.json'; atomic_write_json(job_path,job)
+            hidden = {'creationflags':subprocess.CREATE_NO_WINDOW} if os.name=='nt' else {'start_new_session':True}
+            subprocess.Popen([sys.executable,'-B','-m','gpt56_vnext.update_runtime','--job',str(job_path)],
+                             cwd=self.application,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL,**hidden)
+            import threading
+            threading.Thread(target=server.shutdown,daemon=True).start()
+        except Exception as exc:
+            self.set_status('failed',message=exc.code if isinstance(exc,AppError) else 'Update preparation failed; current version preserved.')
+            if saved_schedule and saved_schedule.get('enabled'):
+                if state.schedule.task:
+                    await asyncio.gather(state.schedule.task, return_exceptions=True)
+                await state.schedule.resume_after_update()
 
     async def download(self, version: str, locale="zh-CN"):
         if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", version):

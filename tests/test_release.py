@@ -14,6 +14,7 @@ from gpt56_vnext.normalizers import normalize_answer
 from gpt56_vnext.probability_model import score_counts
 from gpt56_vnext.server import create_server
 from gpt56_vnext.transport import build_payload
+from gpt56_vnext import BUNDLED_BASELINES
 
 
 class ReleaseTests(unittest.TestCase):
@@ -29,7 +30,7 @@ class ReleaseTests(unittest.TestCase):
 
     def test_offline_bundles_requests_and_invalid_gate(self):
         with tempfile.TemporaryDirectory() as folder:
-            catalog = BenchmarkCatalog(Path(folder), ROOT / 'gpt56_vnext/baselines/v4.5.2')
+            catalog = BenchmarkCatalog(Path(folder), ROOT / 'gpt56_vnext/baselines' / BUNDLED_BASELINES)
             for item in catalog.local():
                 self.assertEqual(item['publisher'], 'maintainer')
                 package = catalog.get(item['id'], item['version'])
@@ -41,7 +42,7 @@ class ReleaseTests(unittest.TestCase):
                     self.assertNotIn('tools', payload)
                     self.assertTrue(payload['stream'])
                 for tier in package['tiers'].values():
-                    self.assertIn(sum(tier['counts'].values()), (40,80,120) if package['mode']=='claude' else (20,40,60))
+                    self.assertIn(sum(tier['counts'].values()), (60,90,120) if package['mode']=='claude' else (36,72,108))
                     counts = {identity: {'__INVALID_OUTPUT__': n} for identity, n in tier['counts'].items()}
                     self.assertEqual(score_counts(package['fitted'], counts, tier['counts'], tier['thresholds'])['color'], 'yellow')
 

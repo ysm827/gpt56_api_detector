@@ -38,6 +38,16 @@ class SingleRunSchedule:
             "endpoint_name": endpoint.get("name"), "endpoint_url": endpoint.get("base_url"),
             "package_id": saved.get("detection", {}).get("package_id")}
 
+    async def resume_after_update(self):
+        saved = self.store.document('schedule', 'active')
+        if not saved or self.task and not self.task.done():
+            return
+        if saved.get('round_limit') and saved.get('completed_rounds',0) >= saved['round_limit']:
+            return
+        saved.update(enabled=True, next_due=time.time()+saved['interval_seconds'])
+        self.store.put_document('schedule','active',saved)
+        self.task=asyncio.create_task(self._run(saved))
+
     async def _run(self, config):
         try:
             while config["enabled"]:

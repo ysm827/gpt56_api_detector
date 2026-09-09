@@ -242,35 +242,6 @@ class AuditLifecycleTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 app.close()
 
-    async def test_simulation_resume_survives_restart(self):
-        with tempfile.TemporaryDirectory() as folder:
-            project, observations = fixture()
-            inputs = {"project": project, "observations": observations, "collection": {"sources": []},
-                      "options": {"batches": dict.fromkeys(("low", "medium", "high"), 600)}}
-            stop = threading.Event()
-            stop.set()
-            with self.assertRaisesRegex(AppError, "simulation_paused"):
-                calibrate_package(project, observations, inputs["collection"], inputs["options"],
-                    checkpoint_root=Path(folder) / "simulations" / "saved", cancel=stop)
-            with SQLiteStateStore(Path(folder) / "state.sqlite3") as store:
-                store.put_document("simulation_input", "saved", inputs)
-                store.put_document("simulation_task", "saved", {"id": "saved", "project_id": project["id"], "status": "running"})
-            app = AppState(folder, bundled=False)
-            try:
-                self.assertEqual(app.store.document("simulation_task", "saved")["status"], "paused")
-                result = app.call(app.simulate({"resume_id": "saved"}))
-                app.call(asyncio.wait_for(app.calibration_task, 10))
-                self.assertEqual(result["id"], "saved")
-                self.assertEqual(app.store.document("simulation_task", "saved")["status"], "complete")
-                self.assertTrue(calibration_matches(app.store.document("simulation_result", "saved"), "low"))
-            finally:
-                app.close()
-            reopened = AppState(folder, bundled=False)
-            try:
-                self.assertEqual(reopened.store.documents("simulation_task")[0]["id"], "saved")
-                self.assertIsNotNone(reopened.store.document("simulation_result", "saved"))
-            finally:
-                reopened.close()
 
 
 if __name__ == "__main__":

@@ -1,81 +1,39 @@
-# meow llm 检测器 v4.5.2
+# meow LLM Detector 4.5.3
 
-4.5.2已支持六题＋Other基准，强指向线最高98%，并在启动时检查程序和基准更新，发现更新后提示确认。提供源码包和Windows便携包。[基准详情与限制](docs/OTHER_BASELINES_CN.md)。
-
-[English](README_EN.md) · [下载](https://github.com/chen-006/meow-llm-detector/releases/latest)
-
-网页版：https://meowllm.top **有效样本足够的情况下，证据不足可能是因为中转作为号池，部分账号正常部分被风控。或者是内置基准以外的模型，例如gpt5.5**
+通过一组短问题的回答分布，对模型行为进行比较。结果是指纹证据，不是身份认证，也不是对服务商行为的归因。
 
 ## 下载与启动
 
-**Windows 10 / 11，Intel / AMD 64 位：推荐便携包，无需安装 Python。**
+- Windows 10/11、Intel/AMD 64位：选择 `windows-x64-portable-zh-CN.zip`，解压到新目录，运行 `start.bat`。内置独立 Python 和依赖。
+- 源码包：Windows、macOS、Linux 需 Python 3.11+。Windows运行 `start.bat`，macOS/Linux运行 `sh start.sh`；启动器在本目录创建独立依赖环境，不改系统依赖。
+- 默认地址为 http://127.0.0.1:8765/ 。自定义端口可用 `start.bat --port 8790` 或 `sh start.sh --port 8790`。
+- [在线版](https://meowllm.top/) 无需安装，但报告公开且只支持公网 HTTPS API。
 
-| 系统 / 用途 | 中文下载 | 英文下载 |
-|---|---|---|
-| Windows 64 位便携包（推荐） | [windows-x64-portable-zh-CN.zip](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-windows-x64-portable-zh-CN.zip) | [windows-x64-portable-en.zip](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-windows-x64-portable-en.zip) |
-| 源码包 / macOS / Linux | [v4.5.2-zh-CN.zip](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-zh-CN.zip) | [v4.5.2-en.zip](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-en.zip) |
+正式下载以 [GitHub Releases](https://github.com/chen-006/meow-llm-detector/releases) 为准。4.5.3 验收包不是正式发行，不应转发成已发布版本。
 
-便携包内置 Python 3.13.15 和依赖，**完整解压到新文件夹后双击 `start.bat`**，无需另装 Python 或首次安装依赖。源码包需要 Python 3.11+；Windows 运行 `start.bat`，macOS / Linux 运行 `sh start.sh`，首次启动会询问是否安装依赖。调用模型 API 和检查更新仍需网络。
+## 第一次检测
 
-浏览器未自动打开时访问 [http://127.0.0.1:8765/](http://127.0.0.1:8765/)。数据位于 `meow_runs`，迁移前先关闭旧后台。主动保存的连接密钥位于系统凭据库，不随文件夹迁移到另一台电脑；临时 Key 不作持久保存。
+1. 选择协议，填写 API URL 和 Key，或选择已保存连接。
+2. 选择基准和希望验证的模型。实际请求名可手填，也可点击「获取模型」从站点列表选择。
+3. 选择档位，确认最多请求数，开始检测。费用由你的 API 账户承担。
+4. 在检测同页查看结果和历史报告；搜索支持 URL、申报模型、实际请求名。
 
-页面打开后，选模型、填 API 地址和 Key，点“开始检测”。启动时会检查程序和基准更新，有新版本时提示，不自动安装。使用详情见包内 README，下载校验见 [SHA256SUMS.txt](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/SHA256SUMS.txt)。
+Claude 的普通中转默认使用 `claude-fable-5-1` 这类请求名；OpenRouter 使用准确的原始别名。站点返回的模型列表只是配置便利，不证明真实模型身份。
 
-参考论文：[One Token Is Enough](https://arxiv.org/abs/2607.10252)。友情链接：[Linux.do 讨论](https://linux.do/t/topic/2704354) · [路由现象讨论](https://linux.do/t/topic/2728901)。实现参考与致谢：[hlwy-ai-checker](https://github.com/hanlinwenyuan/hlwy-ai-checker)。
+## 更新与旧版迁移
 
-## 历史：4.5.1 变更
+启动时及持续运行每24小时自动检查程序与维护者基准，有更新时顶部提示。一键更新会下载校验、准备新版、等待当前任务完成、重启；启动失败时恢复旧版。旧报告与冻结任务不改用新基准。
 
-默认Claude基准升级为4.5.1-rc1（CL045替换CL039），GPT不变。各题按轮转顺序派发；停止后样本达标仍按同一规则判定。多响应流只采用最后响应ID，末段无效则在预算内重试。
+4.5.2及以前没有自动安装器，第一次需启动新版。关闭旧后台后，可运行 `start.bat --migrate-from "旧版文件夹"`；macOS/Linux用 `sh start.sh --migrate-from "/旧版文件夹"`。只向新的 `meow_runs` 复制数据库与基准，原数据不删除；已有目标数据时不覆盖。跨电脑的系统凭据不会随目录迁移。
 
+开发目录或修改过的程序不能原地自动更新：使用新目录的官方包，迁移数据或指定独立数据路径。更新出错不会授权覆盖用户源码。
 
-新检测的总体有效率和每项有效率均需至少60%；旧报告不重算。解析失败及无法归一为有效答案的响应按设置重试，共用原次数上限，不无限补请求。请求执行结束不等于有效样本足够。
+## 数据与隐私
 
-修复采集恢复时连接与Key错配、切换报告导致留存导出混合，以及HTTP选项入口。进度与有效样本显示加大。
+临时 Key 只在页面和运行任务内存中使用；刷新、关闭页面或后台重启后需重新输入。主动保存连接时，凭据仅进入系统凭据库。报告、非秘密连接配置、预算账本保存在 `meow_runs`。
 
-60%只是最低样本覆盖，不是模型置信度。原99%同池模拟针对足额有效答案，不保证缺样本运行或候选外模型的准确率。
+本地 HTTP 只适合你信任的本机或局域网账号池。在线版的请求（包含 Key）经过 Cloudflare 和网站服务器处理；公开报告包含请求网址、分组和脱敏错误，不包含 Key。
 
-## 它是做什么的？
+检测不符不等于中转站故意替换模型，也可能与上游路由变化、服务降级或基准局限有关；本工具不能单独判定原因。[社区讨论](https://linux.do/t/topic/2811197) 提供经验背景，不是已证实的归因。
 
-向你的 API 问几道短题，看看回答的分布更接近哪个模型。比如同样让模型随便说一个国家，不同模型常选的答案可能不同。
-
-程序在本机运行，附带 GPT 和 Claude 基准，不需要你另外提供可信 API。绿色表示强指向你选择的模型，黄色表示证据不足，红色表示强指向另一个候选模型。**它不是模型身份证，也不能单凭一份报告判断商家造假。**
-
-## 怎么用
-
-1. 选择 GPT、Claude 或其他。内置 GPT 支持 Astra、Sol、Terra、Luna；Claude 支持 Fable 5.1、Opus 5、Sonnet 5、Haiku 4.5。
-2. 填服务商提供的 API 根地址，例如 `https://example.com/v1`。实际请求模型会自动填写，你也可以改成服务商的别名；OpenRouter 通常还需要公司前缀。
-3. 填 key，选择低 / 中 / 高档。内置基准分别发 **20 / 50 / 100 次**，重试另算，费用由你的服务商收取。
-4. 开始检测。报告会分别列出基准采集网址和本次检测网址，并显示每个模型的匹配度与强指向线。
-
-开始旁边可以选择保留请求和响应，结束后导出。临时 key 留在当前页面，方便连测；刷新、关页或后台断开后清空。想下次继续用，可以保存 API 连接，key 只存系统凭据库。分享报告前仍请检查网址和响应里有没有私人信息。
-
-## 基准、生成器和更新
-
-- 两组基准随包提供，也能在“基准库”检查目录并下载；[公开索引](benchmarks/index.json)与[基准文件](benchmarks/official)一起发布。没有联网也能用已安装的基准。
-- “生成基准”可以手填、导入或用 AI 生成候选题，再向你选择的可信 API 采样、推荐选题、模拟和导出。采样和 AI 出题会收费；模拟在本机运行，不发模型请求。
-- 新采集窗口至少间隔 1 分钟。可以手选题目，不必照单接受推荐。
-- 定时检测每次独立计算，不累积旧答案。“检查更新”会提示新版本，经你确认下载；解压到新文件夹再启动，不会自动覆盖正在运行的程序。
-- 4.5.1 不再包含 Juice、长上下文和工具包装，也不需要 Node.js。
-
-更详细的使用与复算方法见[技术文档](TECHNICAL_REPORT_CN.md)。两种语言的程序共用代码，**题面不会随界面语言翻译**，否则旧基准就不适用了。
-
-## 启动不了？
-
-先安装 [Python](https://www.python.org/downloads/)，Windows 安装时勾选加入 PATH。首次安装依赖需要联网，启动器只在本目录创建 `.venv`，不自动安装 Python，也不要求管理员权限。macOS / Linux 还需要可用的系统凭据库；保存连接失败时，仍可临时输入 key 检测。
-
-也可以手动启动：
-
-```sh
-python -m venv .venv
-# Windows: .venv\Scripts\python.exe；macOS / Linux: .venv/bin/python
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -B -m gpt56_vnext --locale zh-CN
-```
-
-然后打开 `http://127.0.0.1:8765/`。退出启动终端即可关闭后台。运行数据在 `meow_runs`；新版本请先用新目录体验，需要迁移时先关闭旧后台，再复制该目录。
-
-## 注意
-
-固定题目可能被专门路由，模型更新、隐藏提示词和采样参数也可能改变结果。池内模拟不是实际线路准确率；黄色不一定是坏模型，绿色也不能证明每次请求都由同一个模型回答。建议使用限额、可撤销的专用 key，不把本地后台公开到互联网。
-
-许可证为 [PolyForm Noncommercial 1.0.0](LICENSE)，保留 chen-006 与贡献者署名。非 OSI 开源许可证；使用和分发请遵守原许可证。
+更多：[使用说明](docs/USAGE_CN.md) · [技术与限制](TECHNICAL_REPORT_CN.md) · [制作基准](docs/BASELINES_CN.md) · [4.5.3变化](docs/CHANGELOG_CN.md)

@@ -9,6 +9,7 @@ import httpx
 
 from .benchmark import MAX_PACKAGE_BYTES, identifier, load_package
 from .errors import AppError
+from . import __version__
 from .proxies import http_client_options
 from .utils import atomic_write_json, recognized_provider, strict_json_loads, utc_now
 
@@ -111,13 +112,22 @@ class BenchmarkCatalog:
         item = next((item for item in index["packages"] if item["id"] == identity and item["version"] == version), None)
         if not item or item.get("withdrawn") == "security":
             raise AppError("catalog_package_unavailable")
+        required = item.get('minimum_program_version', '4.5.0')
+        if not re.fullmatch(r'\d+\.\d+\.\d+', required):
+            raise AppError('invalid_catalog_version')
+        if tuple(map(int, required.split('.'))) > tuple(map(int, __version__.split('.'))):
+            raise AppError('program_update_required', field=required)
         commit = index.get("commit", "")
         if not re.fullmatch(r"[a-f0-9]{40}", commit):
             raise AppError("catalog_commit_invalid")
         raw = await download_bytes(f"https://raw.githubusercontent.com/{REPOSITORY}/{commit}/{item['path']}", MAX_PACKAGE_BYTES)
         if hashlib.sha256(raw).hexdigest() != item["sha256"]:
             raise AppError("download_hash_mismatch")
-        package = load_package(raw)
+        value = strict_json_loads(raw)
+        required = value.get('engine', {}).get('minimum_version', '4.5.0')
+        if re.fullmatch(r'\d+\.\d+\.\d+', required) and tuple(map(int, required.split('.'))) > tuple(map(int, __version__.split('.'))):
+            raise AppError('program_update_required', field=required)
+        package = load_package(value)
         if package["content_sha256"] != item["content_sha256"]:
             raise AppError("catalog_identity_mismatch")
         if (package["id"], package["version"], package["mode"]) != (identity, version, item["mode"]):

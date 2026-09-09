@@ -6,6 +6,7 @@ from .benchmark import TIERS, cells_by_id, collection_contract, load_package
 from .errors import AppError
 from .executor import FrozenRun, runtime_options
 from .probability_model import SCORING_VERSION, score_counts
+from .predictive import SCORING_VERSION as PREDICTIVE_VERSION
 from .simulation import simulation_contract
 from .utils import utc_now, normalize_site_group, integer
 
@@ -18,6 +19,9 @@ def build_single_jobs(package: dict, tier: str, request_model: str) -> list[dict
 
 
 def calibration_matches(package: dict, tier: str) -> bool:
+    if package['engine']['scoring_version'] == PREDICTIVE_VERSION:
+        from .predictive_calibration import calibration_matches as predictive_matches
+        return predictive_matches(package, tier)
     if package["engine"]["scoring_version"] != SCORING_VERSION:
         return False
     if package['engine'].get('virtual_reference_version') == 1:
@@ -37,7 +41,7 @@ class DetectorSession:
     def __init__(self, store, session_id: str, package: dict, config: dict, key: str, *, transport=None):
         self.store, self.session_id = store, session_id
         self.package = load_package(package)
-        if self.package["engine"]["scoring_version"] != SCORING_VERSION:
+        if self.package["engine"]["scoring_version"] not in (SCORING_VERSION, PREDICTIVE_VERSION):
             raise AppError("benchmark_recalibration_required")
         tier = config.get("tier", "low")
         models = [model["id"] for model in self.package["models"]]
@@ -55,6 +59,9 @@ class DetectorSession:
             self.config["sample_ratio"] = config["sample_ratio"]
         if "version" in config:
             self.config["version"] = config["version"]
+        if self.package['engine']['scoring_version'] == PREDICTIVE_VERSION:
+            from . import __version__
+            self.config.update(sample_ratio=.6, version=__version__)
         if 'retry_budget' in self.config['runtime']:
             integer(self.config['runtime']['retry_budget'], 'retry_budget', 0, sum(self.package['tiers'][tier]['counts'].values())*10)
         if "site_group" in config:

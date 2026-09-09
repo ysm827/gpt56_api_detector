@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from .errors import AppError, RequestError
+from .errors import AppError, RequestError, SAFETY_STOP_CODES
 from .benchmark import cells_by_id
 from .normalizers import normalize_answer
 from .retention import exchange_record
@@ -117,7 +117,7 @@ class FrozenRun:
                 if attempt_id is None:
                     raise
                 self.guard.check(exc.evidence)
-                safety_stop = exc.code in ("credential_echo", "credential_in_configuration")
+                safety_stop = exc.code in SAFETY_STOP_CODES
                 exc.retryable = not safety_stop
                 retry = not safety_stop and attempt_number < limit and not self.stopped
                 if self.retry_budget is not None:
@@ -128,7 +128,8 @@ class FrozenRun:
                           "started_at": started, "completed_at": utc_now()}
                 if exc.code == 'invalid_answer':result['category'] = '__INVALID_OUTPUT__'
                 self.store.append_event(self.session_id, "attempt_decision", payload={"job_id": job["job_id"],
-                    "attempt": attempt_number, "retryable": exc.retryable, "will_retry": retry, "code": exc.code})
+                    "attempt": attempt_number, "retryable": exc.retryable, "will_retry": retry,
+                    "code": exc.code, "error": exc.public()})
                 self.store.finish_attempt(attempt_id=attempt_id, status="error", stage="transport", category=exc.code,
                     retryable=exc.retryable, http_status=exc.status, safe_message=exc.code,
                     final_result=result if self.retry_budget is not None or not retry else None,
@@ -180,8 +181,12 @@ class FrozenRun:
                 task.cancel()
             await asyncio.gather(*self.active, return_exceptions=True)
             self.active.clear()
-            await self.transport.close()
-            self.key = ""
-            self.guard = SecretGuard()
-            self.store.update_session_status(self.session_id, "error" if self.failure else "paused" if self.stopped else "complete")
+            try:
+                await self.transport.close()
+            except Exception:
+                self.failure = self.failure or 'connection_close_failed'
+            finally:
+                self.key = ""
+                self.guard = SecretGuard()
+                self.store.update_session_status(self.session_id, "error" if self.failure else "paused" if self.stopped else "complete")
         return self.store.progress(self.session_id)

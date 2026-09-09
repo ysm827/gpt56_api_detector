@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
 from concurrent.futures import TimeoutError as FutureTimeout
 from contextlib import ExitStack
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -12,25 +11,25 @@ import threading
 from urllib.parse import parse_qs, urlsplit
 import uuid
 
-from .benchmark import DEFAULT_TIER_COUNTS, MAX_PACKAGE_BYTES, build_package, normalize_project
+from .benchmark import DEFAULT_TIER_COUNTS, MAX_PACKAGE_BYTES
 from .catalog import BenchmarkCatalog
-from .selection import similar_probes
-from .candidate_generation import generate_candidates, seed_summary
+from . import __version__
+from .agent_tasks import KIT, task_prompt
 from .detector import DetectorSession
 from .directory_lock import exclusive_directory
 from .transport import AsyncTransport
 from .errors import AppError, RequestError
 from .executor import runtime_options, detection_options
-from .generator import COLLECTION_WINDOW_GAP_SECONDS, ProbeGeneratorSession, analyze_reports, calibrate_package, collection_contract, merge_windows, selected_project
 from .presets import EndpointPresets, estimate_plan
 from .schedule import SingleRunSchedule
 from .store import SQLiteStateStore
 from .updates import ProgramUpdates
-from .utils import canonical_json, integer, normalize_api_base_url, recognized_provider, strict_json_loads, normalize_site_group
+from .utils import canonical_json, integer, strict_json_loads, normalize_site_group
 from .security import SecretGuard
 
 WEB_ROOT = Path(__file__).with_name("web")
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
+          "/assets/ui.js": ("ui.js", "text/javascript; charset=utf-8"),
           "/assets/app.js": ("app.js", "text/javascript; charset=utf-8"),
           "/assets/workbench.js": ("workbench.js", "text/javascript; charset=utf-8"),
           "/assets/i18n.js": ("i18n.js", "text/javascript; charset=utf-8"),
@@ -49,28 +48,49 @@ class AppState:
             self.store = SQLiteStateStore(self.root / "state.sqlite3")
             resources.callback(self.store.close)
             self.store.interrupt_active_sessions()
-            self.catalog = BenchmarkCatalog(self.root / "benchmarks", Path(__file__).with_name("baselines") / "v4.5.2" if bundled else None)
+            from . import BUNDLED_BASELINES
+            self.catalog = BenchmarkCatalog(self.root / "benchmarks", Path(__file__).with_name("baselines") / BUNDLED_BASELINES if bundled else None)
             self.presets = EndpointPresets(self.store)
             self.updates = ProgramUpdates(self.root / "updates", self.store)
             self.active = {}
             self._closed = False
             self.rate_gates = {}
-            self.calibration = None
-            for task in self.store.documents("simulation_task"):
-                if task["status"] == "running":
-                    task["status"] = "paused"
-                    self.store.put_document("simulation_task", task["id"], task)
-            for identity in self.store.document_ids("simulation_result"):
-                saved = self.store.document("simulation_task", identity)
-                if not saved or "models" not in saved or any("sample_scope" not in value for value in saved.get("tiers", {}).values()):
-                    package = self.store.document("simulation_result", identity)
-                    self.store.put_document("simulation_task", identity, self.simulation_summary(identity, package))
             self.loop = asyncio.new_event_loop()
             self.thread = threading.Thread(target=self.loop.run_forever, daemon=True)
             self.thread.start()
             resources.callback(self._stop_loop)
             self.schedule = SingleRunSchedule(self.store, self.scheduled_run)
             self._resources = resources.pop_all()
+            asyncio.run_coroutine_threadsafe(self.resume_updated_schedule(), self.loop)
+
+    async def resume_updated_schedule(self):
+        resume_schedule = self.store.document('settings', 'resume_schedule_after_update')
+        pending = self.store.document('settings', 'pending_baseline_updates')
+        if not resume_schedule and not pending:
+            return
+        while self.updates.busy() and not self._closed:
+            await asyncio.sleep(.5)
+        if not self._closed:
+            if pending:
+                try:
+                    await self.install_baselines(pending)
+                except AppError:
+                    pass  # Pending request stays visible and can be retried by the user.
+            if resume_schedule:
+                self.store.delete_document('settings', 'resume_schedule_after_update')
+                await self.schedule.resume_after_update()
+
+    async def install_baselines(self, requested):
+        if not isinstance(requested, list) or len(requested) > 32:
+            raise AppError('invalid_catalog_request')
+        self.store.put_document('settings', 'pending_baseline_updates', requested)
+        installed = [await self.catalog.install(p.get('id'), p.get('version')) for p in requested]
+        defaults = self.store.document('settings', 'default_benchmarks') or {}
+        for p in installed:
+            defaults[p['mode']] = {'id':p['id'], 'version':p['version']}
+        self.store.put_document('settings', 'default_benchmarks', defaults)
+        self.store.delete_document('settings', 'pending_baseline_updates')
+        return {'installed':len(installed)}
 
     def call(self, coroutine, timeout=30):
         future = asyncio.run_coroutine_threadsafe(coroutine, self.loop)
@@ -80,18 +100,6 @@ class AppState:
             future.cancel()
             raise
 
-    async def generate(self, body):
-        if getattr(self, "generation_task", None) and not self.generation_task.done():
-            raise AppError("generation_already_running", status=409)
-        options = body.get("options")
-        key = body.get("key")
-        if not isinstance(options, dict) or not isinstance(key, str) or not key:
-            raise AppError("generation_connection_required")
-        self.generation_task = asyncio.current_task()
-        result = await generate_candidates(options, key, gates=self.rate_gates)
-        self.store.put_document("generation", result["id"], result)
-        return result
-
     def connection(self, body):
         key = body.get("key", "")
         if body.get("endpoint_id"):
@@ -100,7 +108,22 @@ class AppState:
                     "request_model": body.get("request_model") or preset["model"]}, key or saved
         return {key: body.get(key) for key in ("base_url", "allow_insecure", "request_model")}, key
 
+    async def models(self, body):
+        connection, key = self.connection(body)
+        if not isinstance(key, str) or not key:
+            raise AppError('credential_required')
+        transport = AsyncTransport()
+        try:
+            return await transport.models(connection['base_url'], key,
+                                          allow_insecure=connection.get('allow_insecure') is True)
+        finally:
+            await transport.close()
+
     async def start_run(self, kind, body, *, connection_override=None):
+        if kind != "detection":
+            raise AppError("collection_moved_to_cli")
+        if self.updates.busy():
+            raise AppError('update_waiting', status=409)
         connection, key = connection_override or self.connection(body)
         if not isinstance(key, str) or not key:
             raise AppError("credential_required")
@@ -114,43 +137,25 @@ class AppState:
             config = saved["config"]
             if connection.get("base_url") != config["base_url"]:
                 raise AppError("frozen_configuration_mismatch")
-            source = config["package"] if kind == "detection" else config["project"]
-            if kind == "detection":
-                self.catalog.check_withdrawal(source)
+            source = config["package"]
+            self.catalog.check_withdrawal(source)
         else:
             config = {**connection, "runtime": body.get("runtime", {})}
-            if kind == "detection":
-                config["sample_ratio"] = .6
-                config["version"] = "4.5.2"
-                config["site_group"] = body.get("site_group", "")
-                source = self.catalog.get(body.get("package_id"), body.get("package_version"))
-                config["benchmark_publisher"] = next(item["publisher"] for item in self.catalog.local() if item["id"] == source["id"] and item["version"] == source["version"])
-                config.update({"tier": body.get("tier", "low"), "claimed_model": body.get("claimed_model")})
-                if config['tier'] not in source['tiers']:
-                    raise AppError('invalid_detection_configuration')
-                config['runtime'] = detection_options(body.get('runtime', {}), sum(source['tiers'][config['tier']]['counts'].values()))
-                if not config.get("request_model"):
-                    config["request_model"] = body.get("claimed_model")
-            else:
-                source = normalize_project(body.get("project"))
-                config.update({"window": body.get("window", 1), "samples": body.get("samples", 3), "probe_ids": body.get("probe_ids")})
-                if config["window"] != 1:
-                    prior = self.store.report(body.get("prior_session_id", ""))
-                    if not prior or prior.get("kind") != "collection" or collection_contract(prior["project"]) != collection_contract(source) or prior["progress"]["status"] != "complete":
-                        raise AppError("prior_collection_required")
-                    previous = prior["collection"]["windows"].get(str(config["window"] - 1))
-                    if not previous:
-                        raise AppError("prior_collection_required")
-                    ended = datetime.fromisoformat(previous["ended_at"])
-                    if (datetime.now(timezone.utc) - ended).total_seconds() < COLLECTION_WINDOW_GAP_SECONDS:
-                        raise AppError("collection_window_gap_not_elapsed")
-        if kind == "collection" and any(runner.config["kind"] == "collection" and
-                runner.config["project"]["id"] == source["id"] for runner, _task in self.active.values()):
-            raise AppError("collection_already_running", status=409)
+            config["sample_ratio"] = .6
+            config["version"] = __version__
+            config["site_group"] = body.get("site_group", "")
+            source = self.catalog.get(body.get("package_id"), body.get("package_version"))
+            config["benchmark_publisher"] = next(item["publisher"] for item in self.catalog.local() if item["id"] == source["id"] and item["version"] == source["version"])
+            config.update({"tier": body.get("tier", "low"), "claimed_model": body.get("claimed_model")})
+            if config['tier'] not in source['tiers']:
+                raise AppError('invalid_detection_configuration')
+            config['runtime'] = detection_options(body.get('runtime', {}), sum(source['tiers'][config['tier']]['counts'].values()))
+            if not config.get("request_model"):
+                config["request_model"] = body.get("claimed_model")
         options = runtime_options(config.get("runtime", {}))
         sender = AsyncTransport([key], timeout=options["timeout"], concurrency=options["workers"], gates=self.rate_gates)
         try:
-            runner = (DetectorSession if kind == "detection" else ProbeGeneratorSession)(
+            runner = DetectorSession(
                 self.store, identity, source, config, key, transport=sender)
         except Exception:
             await sender.close()
@@ -159,20 +164,6 @@ class AppState:
         self.active[identity] = (runner, task)
         task.add_done_callback(lambda _future: self.active.pop(identity, None))
         return identity
-
-    def collection_history(self, project):
-        project = normalize_project(project, draft=True)
-        contract = collection_contract(project)
-        result = []
-        for row in self.store.collection_sessions(project["id"]):
-            config = strict_json_loads(row["config_json"])
-            if collection_contract(config["project"]) != contract:
-                continue
-            result.append({"session_id": row["session_id"], "window": config["window"], "samples": config["samples"],
-                "base_url": config["base_url"], "created_at": row["created_at"],
-                "next_due": datetime.fromisoformat(row["updated_at"]).timestamp() + COLLECTION_WINDOW_GAP_SECONDS,
-                **self.store.progress(row["session_id"])})
-        return result
 
     async def scheduled_run(self, body):
         endpoint = body["endpoint_snapshot"]
@@ -241,73 +232,11 @@ class AppState:
 
     def status(self):
         return {"sessions": self.store.session_summaries(), "active": list(self.active),
-                "schedule": self.schedule.status(), "calibration": self.calibration}
+                "schedule": self.schedule.status()}
 
     def snapshot(self):
-        return {**self.status(), "version": "4.5.2", "brand": "meow LLM Detector", "packages": self.catalog.local(),
-                "endpoints": self.presets.list(), "projects": self.store.documents("project"), "catalog": self.catalog.index()}
-
-    @staticmethod
-    def simulation_summary(identity, package):
-        return {"id": identity, "status": "complete", "project_id": package["id"], "name": package["metadata"]["name"],
-            "models": {model["id"]: model["name"] for model in package["models"]},
-            "package_id": package["id"], "package_version": package["version"],
-            "tiers": {tier: {"sample_scope": result.get("sample_scope", "not_declared"),
-                "target_denominator": result.get("target_denominator", "not_declared"),
-                **{key: value for key, value in result.items() if key in
-                {"status", "thresholds", "correct_rates", "target", "selection_target"}}}
-                for tier, result in package["calibration"]["tiers"].items()}}
-
-    async def simulate(self, body):
-        if self.calibration and self.calibration.get("status") == "running":
-            raise AppError("simulation_already_running", status=409)
-        identity = body.get("resume_id")
-        if identity:
-            task = self.store.document("simulation_task", identity)
-            if not task:
-                raise AppError("simulation_result_not_found", status=404)
-            if task["status"] == "complete":
-                return {"id": identity}
-            inputs = self.store.document("simulation_input", identity)
-            if not inputs:
-                raise AppError("simulation_input_missing")
-            project, observations, collection, options = (inputs[key] for key in ("project", "observations", "collection", "options"))
-        else:
-            reports = [self.store.report(identity) for identity in body.get("session_ids", [])]
-            if any(not report or report.get("kind") != "collection" for report in reports):
-                raise AppError("collection_required")
-            project, observations, collection = merge_windows(reports)
-            if body.get("project"):
-                current = normalize_project(body["project"])
-                if collection_contract(current) != collection_contract(project):
-                    raise AppError("collection_contract_mismatch")
-                project = current
-            project = selected_project(project, body.get("selected", []), body.get("tiers"))
-            options = body.get("options", {})
-            identity = uuid.uuid4().hex
-            self.store.put_document("simulation_input", identity, {
-                "project": project, "observations": observations, "collection": collection, "options": options})
-        cancel = threading.Event()
-        self.calibration = {"id": identity, "project_id": project["id"], "name": project["metadata"]["name"],
-                            "status": "running", "progress": {}}
-        self.store.put_document("simulation_task", identity, self.calibration)
-        self.calibration_cancel = cancel
-
-        async def calculate():
-            try:
-                package = await asyncio.to_thread(calibrate_package, project, observations, collection, options,
-                    checkpoint_root=self.root / "simulations" / identity, cancel=cancel,
-                    progress=lambda progress: self.calibration.update({"progress": progress}))
-                self.store.put_document("simulation_result", identity, package)
-                self.calibration = self.simulation_summary(identity, package)
-            except AppError as exc:
-                self.calibration.update({"status": "paused" if exc.code == "simulation_paused" else "error", "error": exc.public()})
-            except Exception:
-                self.calibration.update({"status": "error", "error": {"code": "simulation_failed"}})
-            finally:
-                self.store.put_document("simulation_task", identity, self.calibration)
-        self.calibration_task = asyncio.create_task(calculate())
-        return {"id": identity}
+        return {**self.status(), "version": __version__, "brand": "meow LLM Detector", "packages": self.catalog.local(),
+                "endpoints": self.presets.list(), "defaults": self.store.document("settings", "default_benchmarks") or {}, "catalog": self.catalog.index()}
 
     async def shutdown(self):
         self.schedule.pause()
@@ -317,13 +246,6 @@ class AppState:
             await asyncio.gather(*(task for _runner, task in tuple(self.active.values())), return_exceptions=True)
         if self.schedule.task:
             await asyncio.gather(self.schedule.task, return_exceptions=True)
-        if hasattr(self, "calibration_cancel"):
-            self.calibration_cancel.set()
-            await asyncio.gather(self.calibration_task, return_exceptions=True)
-        generation = getattr(self, "generation_task", None)
-        if generation and not generation.done():
-            generation.cancel()
-            await asyncio.gather(generation, return_exceptions=True)
 
     def close(self):
         if self._closed:
@@ -384,20 +306,34 @@ class Handler(BaseHTTPRequestHandler):
                 name, content_type = ASSETS[path]
                 self._send((WEB_ROOT / name).read_bytes(), content_type=content_type, bootstrap=path == "/")
             elif path == "/api/bootstrap":
-                self._send({"token": self.server.token, "version": "4.5.2", "locale": self.server.state.locale, "seed_pool": seed_summary(), "tier_defaults": DEFAULT_TIER_COUNTS}, bootstrap=True)
+                self._send({"token": self.server.token, "version": __version__, "locale": self.server.state.locale, "tier_defaults": DEFAULT_TIER_COUNTS}, bootstrap=True)
             elif path == "/api/snapshot":
                 self._send(self.server.state.snapshot())
             elif path == "/api/status":
                 self._send(self.server.state.status())
-            elif path == "/api/simulations":
-                self._send(self.server.state.store.documents("simulation_task"))
-            elif path.startswith("/api/simulation/"):
-                identity = path.removeprefix("/api/simulation/")
+            elif path == '/api/program/update-status':
+                self._send(self.server.state.updates.status())
+            elif path == '/api/reports':
+                args = parse_qs(urlsplit(self.path).query)
+                query = args.get('q', [''])[0].strip()
+                if len(query) > 2048:
+                    raise AppError('invalid_query')
+                cursor = args.get('before', [None])[0]
+                if cursor is not None:
+                    if not cursor.isdecimal():
+                        raise AppError('invalid_cursor')
+                    cursor = integer(int(cursor), 'before', 1, 2**63-1)
+                self._send(self.server.state.store.search_reports(query, cursor))
+            elif path == "/api/legacy-work":
                 state = self.server.state
-                task = state.calibration if (state.calibration or {}).get("id") == identity else state.store.document("simulation_task", identity)
-                if not task:
-                    raise AppError("simulation_result_not_found", status=404)
-                self._send(task)
+                self._send({kind: state.store.documents(kind) for kind in ("project","simulation_task","simulation_result")})
+            elif path == "/api/agent-kit":
+                import io, zipfile
+                output = io.BytesIO()
+                with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+                    for entry in KIT.glob("*.md"):
+                        archive.writestr(entry.name, entry.read_bytes())
+                self._send(output.getvalue(), content_type="application/zip")
             elif path.startswith("/api/retention/"):
                 identity = path.removeprefix("/api/retention/")
                 if not self.server.state.store.session(identity):
@@ -443,13 +379,8 @@ class Handler(BaseHTTPRequestHandler):
             state = self.server.state
             if path == "/api/run/start":
                 result = {"session_id": state.call(state.start_run("detection", body))}
-            elif path == "/api/collection/start":
-                result = {"session_id": state.call(state.start_run("collection", body))}
-            elif path == "/api/collection/profile":
-                provider = recognized_provider(normalize_api_base_url(body.get("base_url", ""), allow_insecure=body.get("allow_insecure") is True))
-                result = {"provider": provider, "max_in_flight": 4 if provider == "openrouter" else None}
-            elif path == "/api/candidates/generate":
-                result = state.call(state.generate(body), timeout=130)
+            elif path == '/api/models':
+                result = state.call(state.models(body), timeout=35)
             elif path == "/api/run/stop":
                 result = state.call(state.stop_run(body.get("session_id")))
             elif path == "/api/run/estimate":
@@ -458,30 +389,29 @@ class Handler(BaseHTTPRequestHandler):
                 if tier not in package['tiers']:raise AppError('invalid_detection_configuration')
                 runtime = detection_options(body.get('runtime', {}), sum(package['tiers'][tier]['counts'].values()))
                 result = estimate_plan(package, tier, retry_budget=runtime['retry_budget'])
-            elif path == "/api/project/save":
-                result = normalize_project(body.get("project"), draft=True)
-                selected = body.get("selected", body.get("project", {}).get("selected"))
-                if selected is not None:
-                    if not isinstance(selected, list) or len(set(selected)) != len(selected) or set(selected) - {probe["id"] for probe in result["probes"]}:
-                        raise AppError("invalid_selection")
-                    result["selected"] = selected
-                state.store.put_document("project", result["id"], result)
-            elif path == "/api/project/collections":
-                result = state.collection_history(body.get("project"))
-            elif path == "/api/project/similar":
-                result = similar_probes(normalize_project(body.get("project"), draft=True))
-            elif path == "/api/project/delete":
-                state.store.delete_document("project", body.get("id"))
-                result = {"deleted": True}
             elif path == "/api/endpoint/save":
                 result = state.presets.save(body.get("preset"), body.get("key"))
             elif path == "/api/endpoint/delete":
                 state.presets.delete(body.get("id"))
                 result = {"deleted": True}
+            elif path == "/api/agent-prompt":
+                result = task_prompt(body, data_root=state.root, locale=state.locale)
+            elif path == "/api/catalog/default":
+                package = state.catalog.get(body.get("id"), body.get("version"))
+                defaults = state.store.document("settings", "default_benchmarks") or {}
+                defaults[package["mode"]] = {"id": package["id"], "version": package["version"]}
+                state.store.put_document("settings", "default_benchmarks", defaults)
+                result = defaults
+            elif path == "/api/catalog/update":
+                result = state.call(state.install_baselines(body.get('packages')), timeout=300)
             elif path == "/api/catalog/refresh":
                 result = state.call(state.catalog.refresh(), timeout=70)
             elif path == "/api/program/check-update":
                 result = state.call(state.updates.check(body.get("locale", state.locale)), timeout=40)
+            elif path == '/api/program/install-update':
+                if body.get('confirmed') is not True:
+                    raise AppError('update_download_confirmation_required')
+                result = state.call(state.updates.install(body.get('version'), body.get('locale', state.locale), state, self.server))
             elif path == "/api/program/download-update":
                 if body.get("confirmed") is not True:
                     raise AppError("update_download_confirmation_required")
@@ -492,24 +422,6 @@ class Handler(BaseHTTPRequestHandler):
                 result = state.catalog.install_local(body.get("package"))
             elif path == "/api/package/export":
                 result = state.catalog.get(body.get("id"), body.get("version"))
-            elif path == "/api/selection":
-                reports = [state.store.report(identity) for identity in body.get("session_ids", [])]
-                result = analyze_reports(reports, body.get("project"), body.get("options"))
-            elif path == "/api/simulation/start":
-                result = state.call(state.simulate(body))
-            elif path in {"/api/simulation/export", "/api/simulation/install"}:
-                package = state.store.document("simulation_result", body.get("id"))
-                if not package:
-                    raise AppError("simulation_result_not_found", status=404)
-                if body.get("version"):
-                    package["version"] = body["version"]
-                    package = build_package(package, package["observations"], collection=package["collection"],
-                        calibration=package["calibration"], validation=package["validation"])
-                result = state.catalog.install_local(package) if path.endswith("install") else package
-            elif path == "/api/simulation/stop":
-                if hasattr(state, "calibration_cancel") and body.get("id") == (state.calibration or {}).get("id"):
-                    state.calibration_cancel.set()
-                result = {"stopping": True}
             elif path == "/api/schedule/start":
                 state.call(state.start_schedule(body))
                 result = {"started": True}

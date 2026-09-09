@@ -10,6 +10,8 @@ from gpt56_vnext.benchmark import collection_contract, load_package
 from gpt56_vnext.detector import calibration_matches
 from gpt56_vnext.simulation import calibrate
 from gpt56_vnext.utils import atomic_write_json
+from gpt56_vnext import BUNDLED_BASELINES
+from gpt56_vnext.predictive import SCORING_VERSION
 
 
 def main():
@@ -19,9 +21,10 @@ def main():
     parser.add_argument('--quick', action='store_true')
     parser.add_argument('--output', type=Path, default=ROOT / 'reproduction')
     args = parser.parse_args()
-    manifest = json.loads((ROOT / 'gpt56_vnext/baselines/v4.5.2/manifest.json').read_text())
+    bundle = ROOT / 'gpt56_vnext/baselines' / BUNDLED_BASELINES
+    manifest = json.loads((bundle / 'manifest.json').read_text())
     for item in manifest['packages']:
-        package = load_package((ROOT / 'gpt56_vnext/baselines/v4.5.2' / item['file']).read_bytes())
+        package = load_package((bundle / item['file']).read_bytes())
         if args.mode and package['mode'] != args.mode:
             continue
         for tier, expected in package['calibration']['tiers'].items():
@@ -30,10 +33,8 @@ def main():
             if args.check_only:
                 print(package['mode'], tier, 'binding OK')
                 continue
-            if package['engine'].get('virtual_reference_version'):
-                from reproduce_other import reproduce
-                reproduce(package, tier, args.output, args.quick)
-                continue
+            if package['engine']['scoring_version'] == SCORING_VERSION:
+                raise SystemExit('Use --check-only for bundled integrity checks. Predictive calibration requires the original task and held-out observations; use baseline_cli simulate with that campaign. It cannot be reconstructed from fitted counts alone.')
             folder = args.output / package['mode'] / ('quick' if args.quick else 'full')
             result = calibrate(package['fitted'], package['tiers'][tier]['counts'],
                 request_signature=collection_contract(package),

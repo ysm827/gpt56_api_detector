@@ -1,6 +1,44 @@
 // One interface and one translation catalog; benchmark prompts are never translated.
 let locale = document.documentElement.lang === "en" ? "en" : "zh-CN";
 const english = {
+  "保留请求与响应到本机":"Keep request and response evidence locally",
+  "GitHub 项目（新标签页打开）":"GitHub project (opens in a new tab)",
+  "● 强指向申报模型":"● Strong match to claimed model", "● 证据不足":"● Insufficient evidence", "● 强指向其他模型":"● Strong match to another model",
+  "暂无新的基准":"No new baselines", "尚未安装基准":"No baselines installed", "停止本次检测":"Stop this detection",
+  "检测明细与基准信息":"Detection details and baseline", "次请求":"requests", "仅本页临时使用":"For this page only",
+  "正在检查更新…":"Checking for updates…", "已是最新版本":"You are up to date", "有更新可用":"Updates available",
+  "检查暂不可用，请稍后重试。":"Update check unavailable. Try again later.",
+  "正在准备更新，当前任务结束后自动重启。":"Preparing the update. Restart will follow after current tasks finish.",
+  "含重试最多 {attempts} 次请求，费用由 API 服务商收取。":"Up to {attempts} requests including retries, billed by your API provider.",
+  "检测台":"Detect", "模型检测":"Model detection", "连接 · 检测 · 查看结果":"Connect · Detect · Review",
+  "开始检测":"Start detection", "实时":"Live", "检测结果":"Results", "模型系列":"Model family",
+  "使用保存的连接":"Use a saved connection", "API 地址":"API URL", "你想验证的模型":"Model to verify",
+  "仅本页临时使用":"For this page only", "选填，建议填写":"Optional, recommended", "基准与连接选项":"Baseline and connection options",
+  "等待一次新的检测":"Ready for a new detection", "开始后，在这里查看实时匹配度。":"Your live match scores will appear here.",
+  "如何理解结果":"Understanding results", "已连接":"Connected", "搜索网址或模型":"Search URL or model",
+  "还没有检测记录":"No reports yet", "没有匹配的检测记录":"No matching reports", "快速":"Quick", "标准":"Standard", "深入":"Thorough",
+  "填写后复制任务，发给你的本地 AI 助手。":"Fill in the fields, copy the task and send it to your local AI assistant.",
+  "复制任务":"Copy task", "下载工具说明":"Download toolkit guide", "旧版数据":"Legacy data",
+  "临时 Key 不写入普通文件。":"Temporary keys are not written to ordinary files.",
+  "匹配度不是身份概率。检测不符也可能与上游路由、服务变化或基准局限有关，不能单独判定原因。":"Match scores are not identity probabilities. Routing, service changes or baseline limitations may affect results; the cause cannot be determined from this tool alone.",
+  "连接与模型":"Connection and model", "连接站点":"Connect", "选择模型":"Choose model", "检测与报告":"Detect and review",
+  "保存连接":"Save connection", "基准与连接选项":"Baseline and connection options", "管理基准 →":"Manage baselines →",
+  "仅本页使用，不写入普通文件":"For this page only; not written to ordinary files",
+  "历史报告":"Reports", "基准":"Baselines", "设置":"Settings",
+  "跟随系统":"System", "浅色":"Light", "深色":"Dark", "外观":"Appearance",
+  "获取模型":"Fetch models", "网址或模型名":"URL or model name", "搜索历史报告":"Search reports",
+  "搜索":"Search", "清除":"Clear", "加载更多":"Load more", "安装":"Install", "导出":"Export",
+  "设为默认":"Use by default", "已设为默认":"Default updated",
+  "创建基准":"Create a baseline", "采集站点 URL":"Collection URL", "候选模型（每行一个）":"Candidate models (one per line)",
+  "复制代理任务":"Copy agent task", "下载代理工具说明":"Download agent toolkit guide",
+  "导出旧基准工作数据":"Export legacy baseline work", "已复制，发给你的本地代理即可。":"Copied. Send it to your local agent.",
+  "复制任务给你的本地代理。优先使用 Other 外部参考；代理会先确认费用与采样方案。":"Send the task to your local agent. Other references are recommended; costs and sampling are confirmed first.",
+  "安装更新":"Install update", "更新程序":"Update application", "更新基准":"Update baselines",
+  "更新已准备，当前任务结束后会自动重启。":"Update queued. The application will restart after current tasks finish.",
+  "发现新版后，可在这里一键更新。":"Install available updates here with one click.",
+  "当前任务结束后自动重启；失败时保留或恢复旧版本。":"Restarts after current tasks finish. Failures preserve or restore the previous version.",
+  "检测不符不等于中转站故意替换模型，也可能与上游路由变化、服务降级或基准局限有关；本工具不能单独判定原因。":"A mismatch does not establish deliberate model substitution. Routing, service changes or baseline limitations may contribute; this tool alone cannot determine the cause.",
+  "社区讨论 ↗":"Community discussion ↗",
   "建议更新":"Updates recommended",
   "查看版本更新":"View program update",
   "查看基准更新":"View baseline updates",
@@ -136,7 +174,7 @@ const english = {
   "基准库": "Benchmark library", "连接设置": "Connections", "指纹检测": "Fingerprint detection",
   "选择基准包和待测连接。新版只输出绿、黄、红三种指纹结论；网络错误和缺样会显示为证据不足。": "Choose a benchmark and endpoint. Green, yellow and red describe fingerprint evidence; network errors and missing samples mean insufficient evidence.",
   "1. 连接": "1. Connection", "已保存连接": "Saved connection", "仅本次手动输入": "Enter for this run only",
-  "基准模式": "Benchmark mode", "其他 · Chat": "Other · Chat", "基准包": "Benchmark package",
+  "基准模式": "Benchmark mode", "other · Chat": "other · Chat", "基准包": "Benchmark package",
   "申报模型": "Claimed model", "实际请求模型": "Request model alias", "API 地址": "API URL",
   "只在本次运行内存中使用；保存连接请使用系统凭据库。": "Used in memory for this run. Saved connections use the OS credential vault.",
   "2. 运行参数": "2. Run settings", "档位": "Tier", "并发": "Concurrency", "重试": "Retries",
@@ -326,6 +364,11 @@ const messages = {
   response_filtered: ["上游内容过滤，响应未完成", "Upstream response filtered"],
   upstream_response_failed: ["上游报告处理失败", "Upstream reported response failure"],
   request_timeout: ["请求超时", "Request timed out"],
+  dns_error: ["域名解析失败", "DNS lookup failed"],
+  tls_error: ["TLS 验证或连接失败", "TLS verification or connection failed"],
+  response_decode_error: ["响应解码失败", "Response decoding failed"],
+  response_read_error: ["响应读取中断", "Response read interrupted"],
+  unsafe_destination: ["目标不是可访问的公网地址", "Destination is not a public address"],
   connection_error: ["连接失败", "Connection failed"], runtime_failure: ["执行或持久化失败，已停止", "Execution or persistence failed; stopped"],
   catalog_unavailable: ["在线目录尚未发布或暂时不可用", "The online catalog is unpublished or unavailable"],
   invalid_version: ["基准版本格式不正确", "Invalid benchmark version"],
@@ -371,6 +414,5 @@ function translatePage(language) {
   }
   document.querySelectorAll("[aria-label]").forEach(node => node.setAttribute("aria-label", t(node.getAttribute("aria-label"))));
   document.querySelectorAll("[placeholder]").forEach(node => node.setAttribute("placeholder", t(node.getAttribute("placeholder"))));
-  document.getElementById("draft-name").value = "My benchmark";
-  document.getElementById("draft-models").placeholder = "API model A\nAPI model B";
+
 }

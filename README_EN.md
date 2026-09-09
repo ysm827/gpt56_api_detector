@@ -1,80 +1,34 @@
-# meow LLM Detector v4.5.2
+# meow LLM Detector 4.5.3
 
-Version 4.5.2 supports six-probe baselines with an Other reference and a 98% threshold ceiling. Startup checks recommend available program and baseline updates without automatically installing them. Source and Windows portable archives are provided. See [baseline scope and limitations](docs/OTHER_BASELINES_CN.md).
+Compare model behavior using distributions of answers to short probes. Fingerprint evidence is not identity authentication and does not establish why a provider's behavior differs.
 
-[中文](README_CN.md) · [Download](https://github.com/chen-006/meow-llm-detector/releases/latest)
+## Download and launch
 
-## Download And Start
+- Windows 10/11 Intel/AMD x64: use the `windows-x64-portable-en.zip`, extract into a new folder and run `start.bat`. Python and dependencies are isolated and bundled.
+- Source packages require Python 3.11+ on Windows, macOS or Linux. Run `start.bat` on Windows or `sh start.sh` on macOS/Linux. Dependencies are installed in a private environment, not globally.
+- The default address is http://127.0.0.1:8765/ . Pass `--port 8790` for a different port.
+- The [website](https://meowllm.top/) requires no installation; reports are public and upstream APIs must use public HTTPS.
 
-**Windows 10 / 11, Intel / AMD 64-bit: use the portable archive. No Python installation required.**
+Use [GitHub Releases](https://github.com/chen-006/meow-llm-detector/releases) for official downloads. A 4.5.3 acceptance build is not a published release.
 
-| Package | Chinese | English |
-|---|---|---|
-| Windows x64 portable (recommended) | [Portable zh-CN](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-windows-x64-portable-zh-CN.zip) | [Portable en](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-windows-x64-portable-en.zip) |
-| Source / macOS / Linux | [Source zh-CN](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-zh-CN.zip) | [Source en](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/meow-llm-detector-v4.5.2-en.zip) |
+## First detection
 
-Portable archives include Python 3.13.15 and dependencies. **Extract the entire archive to a new folder, then run `start.bat`.** Source archives require Python 3.11+; run `start.bat` on Windows or `sh start.sh` on macOS / Linux. The source launcher asks before installing dependencies. Model API calls and update checks require a network connection.
+Choose a protocol, enter URL/Key or select a saved connection, choose a baseline and claimed model, then review the request budget and start. Fetch the site's model list to fill the request alias, or enter it manually. API charges belong to your account. Search history by URL, claimed model or request alias.
 
-If the browser does not open, visit [http://127.0.0.1:8765/](http://127.0.0.1:8765/). Data is stored in `meow_runs`; stop the old backend before migration. Explicitly saved connection keys use the OS credential store and do not move to another computer with the folder. Temporary keys are not persisted.
+Claude aliases default to relay-style hyphens such as `claude-fable-5-1`; OpenRouter retains its precise alias. Model-list entries are not identity evidence.
 
-Startup checks recommend newer program and baseline versions without automatic installation. See the included README for usage and [SHA256SUMS.txt](https://github.com/chen-006/meow-llm-detector/releases/download/v4.5.2/SHA256SUMS.txt) for download checksums.
+## Updates and migration
 
-Research reference: [One Token Is Enough](https://arxiv.org/abs/2607.10252). Community links: [Linux.do discussion](https://linux.do/t/topic/2704354) · [Routing discussion](https://linux.do/t/topic/2728901). Implementation inspiration and thanks: [hlwy-ai-checker](https://github.com/hanlinwenyuan/hlwy-ai-checker).
+Updates are checked at startup and every 24 hours while running. One click prepares and verifies a new version, waits for current tasks and restarts. Failed startup rolls back. Existing reports and frozen tasks retain their original baseline.
 
-## History: Changes in 4.5.1
+Version 4.5.2 has no automatic installer, so entering 4.5.3 requires launching the new package once. Stop the old backend and use `start.bat --migrate-from "old installation"` or `sh start.sh --migrate-from "/old installation"`. The new data directory must be empty. Original data is kept; OS-vault credentials do not migrate between computers. Modified developer checkouts are not overwritten: use a separate official installation.
 
-Web version: https://meowllm.top
+## Privacy and interpretation
 
-Claude defaults to benchmark4.5.1-rc1 (CL045 replaces CL039); GPT is unchanged. Probes dispatch round-robin. Stopped runs still receive the same verdict when sample requirements are met. Multiple-response streams use the last response ID; invalid final responses retry within the original budget.
+Temporary keys stay in page/task memory, not ordinary files. Refreshing the page or restarting the backend loses them. Explicitly saved credentials use the OS vault. Reports and non-secret settings live in `meow_runs`.
 
-New detections require at least 60% valid samples overall and per enabled probe. Historical reports are not rescored. Parse failures and invalid normalized answers share the configured retry budget; requests are never replenished indefinitely. Finishing the request plan does not imply sufficient valid samples.
+Local HTTP is for trusted local networks only. On the website, requests including keys pass through Cloudflare and the server; URLs, groups and sanitized errors are public.
 
-Collection resume keeps the key bound to the selected endpoint; evidence export freezes its report ID. Explicit plain-HTTP options and clearer progress labels are included.
+A mismatch does not establish deliberate model substitution. Routing, service changes or baseline limitations may contribute; this tool alone cannot determine the cause. [Community discussion](https://linux.do/t/topic/2811197) is context, not verified attribution.
 
-The 60% gate is sample coverage, not confidence. Earlier 99% same-pool simulations used full valid batches, not partial batches or outside-candidate models.
-
-## What does it do?
-
-It sends a few short questions to your API and compares the answer distribution with reference models. Ask different models to name an arbitrary country, for example, and their preferred answers can differ.
-
-The app runs locally and includes GPT and Claude benchmarks. You do not need a separate reference API to run a test. Green means a strong match to your claimed model; yellow means insufficient evidence; red means a strong match to another candidate. **It is not an identity certificate or proof that a provider is cheating.**
-
-## Using it
-
-1. Choose GPT, Claude, or Other. Bundled GPT candidates are Astra, Sol, Terra, and Luna. Claude candidates are Fable 5.1, Opus 5, Sonnet 5, and Haiku 4.5.
-2. Enter the provider's API base URL, such as `https://example.com/v1`. The request model is filled in automatically; edit it if your provider uses an alias. OpenRouter usually also needs a provider prefix.
-3. Enter your key and choose low, medium, or high. Bundled benchmarks send **20 / 50 / 100 requests**, excluding retries. Your provider charges for these calls.
-4. Start. The report lists the benchmark collection URL separately from this run's URL, plus model scores and thresholds.
-
-Optional request/response retention is next to Start, with export after the run. Your temporary key stays on the current page for repeat tests and is cleared on reload, close, or a detected backend disconnect. Saved API connections keep keys in the OS credential vault, not ordinary files. Check URLs and response contents for private information before sharing reports.
-
-## Benchmarks, generation, and updates
-
-- Both benchmarks ship with the app. The Benchmark library can fetch new packages from the [public index](benchmarks/index.json). [Package files](benchmarks/official) are published too. Installed packages work offline.
-- Generate benchmark supports manual entry, import, and AI candidate generation, followed by reference sampling, selection suggestions, simulation, and export. AI and sampling calls cost money; local simulation does not call a model.
-- New collection windows must be at least one minute apart. You can choose probes manually instead of following recommendations.
-- Scheduled runs are separate tests, not accumulated evidence. Check for updates finds a release and asks before downloading it. Extract into a new folder and restart; the app does not replace running files.
-- v4.5.1 removes Juice, long-context and tool wrappers. Node.js is not required.
-
-See the [technical report](TECHNICAL_REPORT_EN.md) for details and reproduction commands. Both languages share the same code. **Switching the UI language does not translate calibrated prompts.**
-
-## Startup help
-
-Install [Python](https://www.python.org/downloads/) first; enable PATH during Windows installation. Dependency installation needs internet access. The launcher creates a local `.venv`, does not install Python automatically, and does not request administrator privileges. macOS / Linux need a working OS credential backend to save connections; temporary keys still work without it.
-
-Manual startup:
-
-```sh
-python -m venv .venv
-# Windows interpreter: .venv\Scripts\python.exe
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -B -m gpt56_vnext --locale en
-```
-
-Open `http://127.0.0.1:8765/`. Close the launcher terminal to stop the backend. Local data is stored in `meow_runs`. Try updates in a new folder; stop the old backend before copying that data directory if you want to migrate it.
-
-## Limits and license
-
-Fixed probes can receive special routing. Model updates, hidden prompts, and sampling settings can change distributions. Same-pool simulations are not real-provider accuracy measurements. Yellow does not necessarily mean a bad model, and green does not prove every request goes to the same model. Prefer a revocable, spending-limited key and do not expose the local server to the internet.
-
-Licensed under [PolyForm Noncommercial 1.0.0](LICENSE), with attribution to chen-006 and contributors. This is not an OSI-approved open-source license; use and redistribution remain subject to its terms.
+[Usage](docs/USAGE_EN.md) · [Technical scope](TECHNICAL_REPORT_EN.md) · [Baseline workflow](docs/BASELINES_EN.md) · [Changes](docs/CHANGELOG_EN.md)

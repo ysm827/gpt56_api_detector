@@ -37,3 +37,10 @@ class SecretGuard:
                 value = value.replace(secret, "[REDACTED]")
             return AUTH_PATTERN.sub("[REDACTED]", value)
         return value
+
+    def redact_message(self, text: str) -> str:
+        text = self.redact(text)
+        text = re.sub(r"(?i)(bearer\s+)\S+", r"\1[REDACTED]", text)
+        text = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "[REDACTED]", text)
+        text = re.sub(r"(?i)((?:api[_-]?key|authorization|token|account[_-]?id|user[_-]?id)\s*[=:]\s*)[^\s,;]+", r"\1[REDACTED]", text)
+        return text[:2048]

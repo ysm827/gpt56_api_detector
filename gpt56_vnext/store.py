@@ -686,6 +686,24 @@ class SQLiteStateStore:
             return [{**dict(row), **self._progress(connection, row["session_id"])} for row in rows]
         return self._read(read)
 
+    def search_reports(self, query='', before=None):
+        def read(connection):
+            rows = connection.execute(
+                "SELECT rowid AS sequence,session_id,status,claimed_model,request_model,safe_endpoint,created_at, "
+                "json_extract(config_json,'$.site_group') AS site_group, "
+                "json_extract(report_json,'$.fingerprint.color') AS color, "
+                "json_extract(report_json,'$.fingerprint.quality_status') AS quality_status FROM sessions "
+                "WHERE kind='detection' AND rowid < ? AND ("
+                "instr(lower(coalesce(safe_endpoint,'')),lower(?)) > 0 OR "
+                "instr(lower(coalesce(claimed_model,'')),lower(?)) > 0 OR "
+                "instr(lower(coalesce(request_model,'')),lower(?)) > 0) "
+                "ORDER BY rowid DESC LIMIT 21",
+                (before if before is not None else 2**63-1, query, query, query)).fetchall()
+            return {'items': [{**dict(row), 'progress': self._progress(connection, row['session_id'])}
+                              for row in rows[:20]],
+                    'before': rows[19]['sequence'] if len(rows) > 20 else None}
+        return self._read(read)
+
     def attempt_details(self, session_id: str) -> list[dict[str, Any]]:
         return self._read(lambda connection: [dict(row) for row in connection.execute(
             "SELECT a.attempt_id,a.job_id,a.attempt_no,a.started_at,a.completed_at,a.status,a.stage,a.category,"

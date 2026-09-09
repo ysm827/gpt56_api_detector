@@ -8,6 +8,7 @@ from typing import Any
 from .errors import AppError
 from .normalizers import validate_normalizer
 from .probability_model import SCORING_VERSION, fit_observations
+from .predictive import SCORING_VERSION as PREDICTIVE_VERSION
 from .utils import canonical_json, finite_number, integer, normalize_api_base_url, recognized_provider, sha256_text, strict_json_loads, utc_now
 
 SCHEMA_VERSION = 1
@@ -86,6 +87,7 @@ def normalize_project(value: Any, *, draft: bool = False, _legacy=False) -> dict
     if any(key in value for key in ("juice", "gpt_checks", "anti_rewrite", "continuous")):
         raise AppError("legacy_configuration_requires_migration")
     project = {"mode": value["mode"]}
+    predictive = isinstance(value.get('engine'), dict) and value['engine'].get('scoring_version') == PREDICTIVE_VERSION
     project["id"] = identifier(value.get("id"))
     project["version"] = text(value.get("version", "0.1.0"), "version", limit=64)
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9.-]+)?", project["version"]):
@@ -122,8 +124,11 @@ def normalize_project(value: Any, *, draft: bool = False, _legacy=False) -> dict
         if probe_id in probe_ids:
             raise AppError("duplicate_probe")
         probe_ids.add(probe_id)
-        normalizer = deepcopy(probe.get("normalizer", {"id":"exact_trimmed_casefold", "parameters":{}}))
+        default_normalizer = {"id": "exact_trimmed_casefold", "parameters": {"max_length": 4096} if predictive else {}}
+        normalizer = deepcopy(probe.get("normalizer", default_normalizer))
         validate_normalizer(normalizer)
+        if predictive and normalizer != default_normalizer:
+            raise AppError('unsupported_normalizer', field='normalizer')
         if not _legacy:
             normalizer.setdefault("parameters", {}).setdefault("max_length", 128)
         normalized = {"id": probe_id, "family_id": identifier(probe.get("family_id", probe_id), "family_id"),
@@ -174,6 +179,11 @@ def normalize_project(value: Any, *, draft: bool = False, _legacy=False) -> dict
         if _legacy:
             raise AppError('unsupported_engine')
         project['engine'].update(minimum_version='4.5.2', virtual_reference_version=1)
+    if predictive:
+        project['engine'] = {'minimum_version': '4.5.3', 'scoring_version': PREDICTIVE_VERSION,
+                             'prior_mass': 1.0, 'completion_ratio': .6}
+        if any(m.get('reference_only') for m in project['models']):
+            project['engine']['virtual_reference_version'] = 2
     accepted_engine = dict(project["engine"], scoring_version="meow-fingerprint-v1")
     if "engine" in value and value["engine"] not in (project["engine"], accepted_engine):
         raise AppError("unsupported_engine")
@@ -195,7 +205,7 @@ def normalize_project(value: Any, *, draft: bool = False, _legacy=False) -> dict
         if not isinstance(thresholds, dict) or (thresholds and set(thresholds) != set(model_ids)):
             raise AppError("invalid_thresholds")
         for model, threshold in thresholds.items():
-            finite_number(threshold, model, 0, 1)
+            finite_number(threshold, model, .5 if predictive else 0, .98 if predictive else 1)
         project["tiers"][tier] = {"counts":counts, "thresholds":thresholds}
     return project
 
@@ -232,7 +242,6 @@ def build_package(project: dict, observations: dict, *, collection: dict | None 
     cells = cells_by_id(package)
     validate_observations(observations, models, cells)
     package["observations"] = deepcopy(observations)
-    package["fitted"] = fit_observations(observations, models, cells, _legacy=_legacy)
     package["collection"] = deepcopy(collection or {"sources":[], "scope":"not_collected"})
     if not isinstance(package["collection"], dict) or not isinstance(package["collection"].get("sources"), list):
         raise AppError("invalid_collection")
@@ -245,11 +254,16 @@ def build_package(project: dict, observations: dict, *, collection: dict | None 
             raise AppError("source_url_requires_sanitization")
         if source.get("provider") == "openrouter" and recognized_provider(original) != "openrouter":
             raise AppError("source_provider_mismatch")
-    if any(m.get('reference_only') for m in package['models']):
+    if package['engine']['scoring_version'] == PREDICTIVE_VERSION:
+        from .predictive import fit_observations as fit_predictive
+        package['fitted'] = fit_predictive(observations, models, cells, package['collection'].get('virtual_reference'))
+    elif any(m.get('reference_only') for m in package['models']):
         from .virtual_reference import fit_reference
         package['fitted'] = fit_reference(package, observations, cells, package['collection'])
     elif 'virtual_reference' in package['collection']:
         raise AppError('invalid_virtual_reference')
+    else:
+        package['fitted'] = fit_observations(observations, models, cells, _legacy=_legacy)
     package["calibration"] = deepcopy(calibration or {"status":"not_calibrated"})
     package["validation"] = deepcopy(validation or {"status":"not_independently_validated"})
     if not isinstance(package["calibration"], dict) or not isinstance(package["validation"], dict):

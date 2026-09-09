@@ -151,6 +151,10 @@ def numeric_matches(fitted: dict, draws: dict) -> tuple:
 def score_counts(fitted: dict, counts: dict[str, dict[str, int]], planned: dict[str, int],
                  thresholds: dict[str, float] | None = None, *, calibrated: bool = True,
                  claimed_model: str | None = None, completion_ratio: float = COMPLETION_RATIO) -> dict[str, Any]:
+    from .predictive import SCORING_VERSION as PREDICTIVE_VERSION, score_counts as predictive_counts
+    if fitted.get('scoring_version') == PREDICTIVE_VERSION:
+        return predictive_counts(fitted, counts, planned, thresholds, calibrated=calibrated,
+                                 claimed_model=claimed_model, completion_ratio=.6)
     models = fitted["models"]
     draws = {}
     cell_details, reasons = {}, []

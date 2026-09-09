@@ -36,7 +36,7 @@ def verify(archives):
             env['PYTHONPATH'] = str(temp / 'invalid-system-packages')
             env['PYTHONUSERBASE'] = str(temp / 'invalid-user-packages')
             env['HTTP_PROXY'] = env['HTTPS_PROXY'] = 'http://127.0.0.1:1'
-            python = str(folder / 'portable-python/python.exe')
+            python = str(folder / 'python/python.exe')
             check = '''import sys, ssl, sqlite3, httpx, keyring, numpy, json, uuid
 from pathlib import Path
 root = Path(sys.executable).resolve().parents[1]
@@ -82,8 +82,8 @@ print('Isolated runtime, NumPy, HTTPS and Windows credential round-trip passed')
                     with opener.open(url + '/api/bootstrap', timeout=5) as response:
                         assert response.status == 200
                         json.load(response)
-                    with opener.open(url + '/assets/workbench.js', timeout=5) as response:
-                        assert response.read() == (folder / 'gpt56_vnext/web/workbench.js').read_bytes()
+                    with opener.open(url + '/assets/ui.js', timeout=5) as response:
+                        assert response.read() == (folder / 'gpt56_vnext/web/ui.js').read_bytes()
                     assert not (folder / '.venv').exists()
                     assert (folder / 'meow_runs/state.sqlite3').exists()
                     print(f'PASS {archive_path.name}: moved Unicode/space path; start.bat; no system Python; no pip; HTTP UI', flush=True)

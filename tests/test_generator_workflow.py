@@ -41,31 +41,6 @@ class GeneratorWorkflowTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(AppError):
                 collection_jobs(project, 5, 2, probe_ids=selected)
 
-    async def test_reduced_second_window_preserves_first_window_and_history(self):
-        project, _ = fixture()
-        with tempfile.TemporaryDirectory() as folder:
-            app = AppState(folder, bundled=False)
-            try:
-                reports = []
-                for window, selected, samples in ((1, ["ab", "ac", "bc"], 3), (2, ["ab"], 5)):
-                    runner = ProbeGeneratorSession(app.store, f"window{window}", project,
-                        {"base_url": "https://fixture.invalid/v1", "window": window, "samples": samples, "probe_ids": selected},
-                        SECRET, transport=EchoModel())
-                    reports.append(await runner.run())
-                modified = deepcopy(project)
-                modified["metadata"]["name"] = "Renamed"
-                reports[1]["project"] = modified
-                _, observations, _ = merge_windows(reports)
-                self.assertEqual(set(observations["ab"]["a"]), {"1", "2"})
-                self.assertEqual(set(observations["ac"]["a"]), {"1"})
-                self.assertEqual(observations["ab"]["a"]["2"]["completed"], 5)
-                history = app.collection_history(modified)
-                self.assertEqual([row["session_id"] for row in history], ["window1", "window2"])
-                self.assertNotIn(SECRET, str(history))
-                modified["probes"][0]["cells"][0]["prompt"] = "Changed prompt"
-                self.assertEqual(app.collection_history(modified), [])
-            finally:
-                app.close()
 
 
 if __name__ == "__main__":

@@ -144,14 +144,6 @@ class ServerTests(unittest.TestCase):
                 server.state.active.clear()
                 server.server_close()
 
-    def test_simulation_summary_retains_scope_and_does_not_invent_legacy_scope(self):
-        package = one_job_package()
-        package["calibration"]["tiers"] = {"low": {"sample_scope": "planned_count_of_valid_answers_per_cell",
-            "target_denominator": "simulated_batches_of_valid_answers_not_all_http_runs"}, "high": {}}
-        value = AppState.simulation_summary("s", package)
-        self.assertEqual(value["tiers"]["low"]["sample_scope"], package["calibration"]["tiers"]["low"]["sample_scope"])
-        self.assertEqual(value["tiers"]["low"]["target_denominator"], package["calibration"]["tiers"]["low"]["target_denominator"])
-        self.assertEqual(value["tiers"]["high"]["target_denominator"], "not_declared")
 
 
 if __name__ == "__main__": unittest.main()

@@ -3,8 +3,8 @@ setlocal
 cd /d "%~dp0"
 where py >nul 2>nul
 if not errorlevel 1 (
-  py -3 launch.py
+  py -3 -B launch.py %*
 ) else (
-  python launch.py
+  python -B launch.py %*
 )
 if errorlevel 1 pause
