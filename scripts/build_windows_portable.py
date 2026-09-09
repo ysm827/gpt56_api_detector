@@ -29,6 +29,12 @@ def write(path, value):
     path.write_bytes(value.encode('utf-8') if isinstance(value, str) else value)
 
 
+def remove_build_directory(path, root):
+    path,root=path.resolve(),root.resolve()
+    if path==root or not path.is_relative_to(root):raise ValueError('Cleanup escaped the build directory')
+    if path.exists():shutil.rmtree(path)
+
+
 def build(source, output, source_commit):
     if os.name != 'nt' or sys.version_info[:2] != (3, 13):
         raise SystemExit('Build with 64-bit Python 3.13 on Windows')
@@ -59,9 +65,9 @@ def build(source, output, source_commit):
                         '--only-binary=:all:', '--no-compile', '--target', str(site_packages),
                         '--report', str(report), '-r', str(source / 'requirements.txt')], check=True)
         # Console entry points contain the CI interpreter path and are not used by the application.
-        shutil.rmtree(site_packages / 'bin', ignore_errors=True)
+        remove_build_directory(site_packages / 'bin',work)
         for cache in list(runtime.rglob('__pycache__')):
-            shutil.rmtree(cache)
+            remove_build_directory(cache,work)
         packages = sorted(({'name': d.metadata['Name'], 'version': d.version}
                            for d in importlib.metadata.distributions(path=[str(site_packages)])), key=lambda p: p['name'].lower())
         manifest = {'source_commit': source_commit, 'builder_commit': os.environ.get('GITHUB_SHA'),

@@ -54,6 +54,7 @@ class AppState:
             self.updates = ProgramUpdates(self.root / "updates", self.store)
             self.active = {}
             self._closed = False
+            self._closing = False
             self.rate_gates = {}
             self.loop = asyncio.new_event_loop()
             self.thread = threading.Thread(target=self.loop.run_forever, daemon=True)
@@ -79,6 +80,11 @@ class AppState:
             if resume_schedule:
                 self.store.delete_document('settings', 'resume_schedule_after_update')
                 await self.schedule.resume_after_update()
+
+    async def prepare_exit(self):
+        if self.active or (self.schedule.status() or {}).get('enabled') or self.updates.busy():
+            raise AppError('finish_work_before_exit',status=409)
+        self._closing = True
 
     async def install_baselines(self, requested):
         if not isinstance(requested, list) or len(requested) > 32:
@@ -120,6 +126,8 @@ class AppState:
             await transport.close()
 
     async def start_run(self, kind, body, *, connection_override=None):
+        if self._closing:
+            raise AppError('backend_closing',status=409)
         if kind != "detection":
             raise AppError("collection_moved_to_cli")
         if self.updates.busy():
@@ -377,6 +385,8 @@ class Handler(BaseHTTPRequestHandler):
                 raise AppError("invalid_request")
             path = urlsplit(self.path).path
             state = self.server.state
+            if state._closing:
+                raise AppError('backend_closing',status=409)
             if path == "/api/run/start":
                 result = {"session_id": state.call(state.start_run("detection", body))}
             elif path == '/api/models':
@@ -412,6 +422,13 @@ class Handler(BaseHTTPRequestHandler):
                 if body.get('confirmed') is not True:
                     raise AppError('update_download_confirmation_required')
                 result = state.call(state.updates.install(body.get('version'), body.get('locale', state.locale), state, self.server))
+            elif path == '/api/program/exit':
+                if body.get('confirmed') is not True:
+                    raise AppError('exit_confirmation_required')
+                state.call(state.prepare_exit())
+                self._send({'stopping':True})
+                threading.Thread(target=self.server.shutdown,daemon=True).start()
+                return
             elif path == "/api/program/download-update":
                 if body.get("confirmed") is not True:
                     raise AppError("update_download_confirmation_required")

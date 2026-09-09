@@ -57,7 +57,7 @@ def launch(root, argv=None):
         timer=threading.Timer(2,webbrowser.open,args=(f'http://127.0.0.1:{args.port}/?lang={locale}',))
         timer.daemon=True;timer.start()
     try:
-        return subprocess.call([str(python),'-B','-m','gpt56_vnext','--port',str(args.port),
+        return subprocess.call([str(python),'-X','utf8','-B','-m','gpt56_vnext','--port',str(args.port),
                                 '--data-root',str(data),'--locale',locale],cwd=current,env=env)
     except KeyboardInterrupt:return 0
     finally:

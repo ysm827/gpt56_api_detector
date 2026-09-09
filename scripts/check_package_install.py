@@ -54,6 +54,7 @@ def fixture_version(root, version, fail=False):
 
 
 def main():
+    sys.stdout.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser()
     parser.add_argument('--archive', type=Path, required=True)
     parser.add_argument('--kind', choices=['source', 'windows-x64-portable'], default='source')
@@ -83,7 +84,7 @@ def main():
     child = None
     with (test / 'launcher.log').open('wb') as log:
         try:
-            command = [str(python), '-B', str(original / 'launch.py'), '--no-browser',
+            command = [str(python), '-X', 'utf8', '-B', str(original / 'launch.py'), '--no-browser',
                        '--port', str(port), '--data-root', str(data)]
             child = AppProcess(command, cwd=test, stdin=subprocess.DEVNULL, stdout=log, stderr=log)
             assert wait_health(port, '4.5.3', child, timeout=90), 'Packaged launcher failed; inspect launcher.log'

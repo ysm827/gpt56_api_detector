@@ -54,7 +54,7 @@ def handoff(job_path, *, keep_process_handle=False):
     def spawn(root):
         python=interpreter(root,job['kind'])
         env={**os.environ,'MEOW_LAUNCH_ROOT':str(launch_root),'MEOW_UPDATE_CONTROL':str(control)}
-        return AppProcess([str(python),'-B','-m','gpt56_vnext','--port',str(job['port']),
+        return AppProcess([str(python),'-X','utf8','-B','-m','gpt56_vnext','--port',str(job['port']),
                                  '--data-root',str(data),'--locale',job['locale']],cwd=root,env=env,
                                  stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     child=None

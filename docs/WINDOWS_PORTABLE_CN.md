@@ -1,13 +1,13 @@
-# meow LLM 检测器 v4.5.1 · Windows 便携版
+# meow4.5.3 · Windows便携版
 
-适用 Windows 10 / 11，Intel / AMD 64 位（x64）。内置 Python 3.13.15 和全部项目依赖，无需另装 Python、配置 PATH 或首次联网安装依赖；调用模型 API 仍需联网。
+适用Windows10/11，Intel/AMD x64。包内有独立Python及依赖，无需安装Python或设置PATH。
 
-1. 下载文件名含 `windows-x64-portable-zh-CN.zip` 的中文包（英文选 `en`）。
-2. **完整解压到新的可写文件夹，双击 `start.bat`**。不要在压缩包内直接运行，也不要删除 `portable-python`。
-3. 浏览器未自动打开时，访问 `http://127.0.0.1:8765/`。使用期间保持终端开启，关闭终端即可停止。
+1. 完整解压文件名包含windows-x64-portable-zh-CN.zip的包到新可写目录。
+2. 双击start.bat。不要在压缩包内运行，也不要删除python文件夹。
+3. 浏览器未打开时访问http://127.0.0.1:8765/；可用start.bat --port8794指定端口（--port与数字之间留空格）。
 
-数据保存在 `meow_runs`。升级请先关闭旧后台，再向新目录迁移该文件夹；系统凭据库里的 Key 不随文件夹迁移到另一台电脑。
+与源码版使用相同评分、基准及更新流程。程序内点击更新后，会准备新版、等待当前任务完成、自动重启；失败时恢复旧版。4.5.2首次进入4.5.3，先结束旧后台，再运行新启动器，可用--migrate-from迁移旧目录。原数据不删除，系统凭据引用不会把Key复制到另一台电脑。
 
-此包与普通 v4.5.1 的检测核心和基准相同，无需重新校准。macOS / Linux 请下载原源码包。`README_SOURCE_CN.md` 中的安装步骤仅用于源码包；便携版请使用 `start.bat`，无需运行 `launch.py`。
+关闭浏览器不等于停止后台。结束检测并暂停计划后，可在设置中点击“停止本地服务”；再次运行原start.bat会打开当前安装版本。报告保存在meow_runs，自动更新不重算旧报告。
 
-构建信息见 `PORTABLE_BUILD.json`，包内校验见 `SHA256SUMS.txt`；Python 许可位于 `portable-python/LICENSE.txt`，依赖许可随各 `.dist-info` 目录保留。算法与统计限制见 `TECHNICAL_REPORT_CN.md`。
+Python版本、依赖与摘要见PORTABLE_BUILD.json；校验清单为SHA256SUMS.txt，Python许可在python/LICENSE.txt，依赖许可随.dist-info目录保留。源码安装步骤见README_SOURCE_CN.md，统计限制见TECHNICAL_REPORT_CN.md。

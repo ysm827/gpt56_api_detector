@@ -187,7 +187,7 @@ def path_check(fitted, pool, planned, source, *, seed, batches, pattern='round_r
     return negative, full_true, result
 
 
-def calibrate_predictive(project, observations, collection, external, options, folder):
+def calibrate_predictive(project, observations, collection, external, options, folder, progress=None):
     target, coverage = options.get('target', .99), options.get('selection_target', .999)
     if any(type(x) not in (float, int) or not .5 < x < 1 for x in (target, coverage)):
         raise AppError('invalid_simulation_target')
@@ -223,6 +223,7 @@ def calibrate_predictive(project, observations, collection, external, options, f
                 raise AppError('simulation_checkpoint_mismatch')
             final['calibration']['tiers'][tier] = saved['calibration']
             report['tiers'][tier] = saved['report']
+            if progress:progress({'tier':tier,'phase':'restored'})
             continue
         batches = integer(options.get('batches',{}).get(tier,10000),'batches',100,100000)
         planned = final['tiers'][tier]['counts']
@@ -238,6 +239,7 @@ def calibrate_predictive(project, observations, collection, external, options, f
                     negative = np.maximum(negative,np.quantile(values,coverage,axis=0,method='higher'))
                     if pattern == 'round_robin':
                         positive[truth] = min(positive[truth],np.nextafter(np.quantile(true_scores,1-target,method='lower'),-np.inf))
+                if progress:progress({'tier':tier,'phase':'calibration','fold':fold+1,'source':source})
         vendor = {m['id']: m.get('source_group') or m['request_model'].split('/')[0] for m in external}
         source_out = []
         for group in sorted(set(vendor.values())):
@@ -252,6 +254,7 @@ def calibrate_predictive(project, observations, collection, external, options, f
                                             batches=batches,pattern=pattern)
                     negative = np.maximum(negative,np.quantile(values,coverage,axis=0,method='higher'))
             source_out.append((held,package))
+            if progress:progress({'tier':tier,'phase':'source_out_calibration','group':group})
         lines = np.maximum(np.maximum(positive,.5),negative)
         thresholds = dict(zip(models,map(float,lines)))
         rows, checks = [], {}
@@ -261,6 +264,7 @@ def calibrate_predictive(project, observations, collection, external, options, f
                                          batches=batches,pattern=pattern,thresholds=thresholds)
                 rows.append({'source':source,'pattern':pattern,**metrics})
                 if pattern == 'round_robin':checks[source]=metrics['outcomes']
+            if progress:progress({'tier':tier,'phase':'check','source':source})
         held_rows = []
         for held,package in source_out:
             for source in held:
@@ -293,6 +297,7 @@ def calibrate_predictive(project, observations, collection, external, options, f
             'source_out_groups':sorted(set(vendor.values())) if source_out else [],
             'negative_coverage_scope':'per wrong class/source/pattern, not a joint error guarantee'}
         atomic_write_json(checkpoint,{'input_sha256':identity,'thresholds':final['tiers'][tier]['thresholds'],'calibration':entry,'report':report['tiers'][tier]})
+        if progress:progress({'tier':tier,'phase':'complete','status':result['status']})
     final['content_sha256'] = content_hash(final)
     atomic_write_json(folder/'verification.json',report)
     return final, report

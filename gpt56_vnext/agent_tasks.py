@@ -25,7 +25,7 @@ def task_prompt(value, *, data_root=None, locale='zh-CN'):
     application = KIT.parent.parent.resolve()
     output = Path(data_root or application/'meow_runs').resolve()/'baseline-work'
     quote = lambda text: "'"+str(text).replace("'", "''")+"'" if os.name=='nt' else shlex.quote(str(text))
-    commands = (("Set-Location -LiteralPath "+quote(application)+"\n& ") if os.name=='nt' else ("cd "+quote(application)+"\n")) + quote(sys.executable)+' -B -m gpt56_vnext.baseline_cli --help'
+    commands = (("Set-Location -LiteralPath "+quote(application)+"\n& ") if os.name=='nt' else ("cd "+quote(application)+"\n")) + quote(sys.executable)+' -X utf8 -B -m gpt56_vnext.baseline_cli --help'
     inputs = json.dumps({'api_url':base,'protocol':mode,'model_aliases':models},ensure_ascii=False,indent=2)
     replacements={'{{APP_ROOT}}':str(application),'{{PYTHON}}':sys.executable,'{{KIT_PATH}}':str(KIT.resolve()),
                   '{{OUTPUT_ROOT}}':str(output),'{{COMMANDS}}':commands,'{{INPUTS}}':inputs}

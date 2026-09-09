@@ -1,6 +1,9 @@
 // One interface and one translation catalog; benchmark prompts are never translated.
 let locale = document.documentElement.lang === "en" ? "en" : "zh-CN";
 const english = {
+  "停止本地服务":"Stop local service",
+  "停止本地服务？历史报告会保留。":"Stop the local service? Saved reports will be kept.",
+  "本地服务已停止，下次运行启动器即可打开。":"Local service stopped. Run the launcher to open it again.",
   "保留请求与响应到本机":"Keep request and response evidence locally",
   "GitHub 项目（新标签页打开）":"GitHub project (opens in a new tab)",
   "● 强指向申报模型":"● Strong match to claimed model", "● 证据不足":"● Insufficient evidence", "● 强指向其他模型":"● Strong match to another model",
@@ -364,6 +367,10 @@ const messages = {
   response_filtered: ["上游内容过滤，响应未完成", "Upstream response filtered"],
   upstream_response_failed: ["上游报告处理失败", "Upstream reported response failure"],
   request_timeout: ["请求超时", "Request timed out"],
+  finish_work_before_exit:["请先结束检测并暂停计划，再停止本地服务。","Finish detections and pause schedules before stopping the service."],
+  backend_closing:["本地服务正在停止。","Local service is stopping."],
+  exit_confirmation_required:["请确认停止本地服务。","Confirm stopping the local service."],
+  connection_close_failed:["关闭连接时出错，临时Key已释放。","Connection cleanup failed; temporary key references were released."],
   dns_error: ["域名解析失败", "DNS lookup failed"],
   tls_error: ["TLS 验证或连接失败", "TLS verification or connection failed"],
   response_decode_error: ["响应解码失败", "Response decoding failed"],

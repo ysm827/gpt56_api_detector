@@ -28,7 +28,7 @@ Project engine:
 - prior_mass: 1.0
 - completion_ratio: 0.6
 
-Internal/external model entries contain id, name, request_model. Use safe IDs such as `external-a`; preserve the real provider alias such as `provider/model-a` in request_model. Never request other as a model. External grouping for source-out checks uses the provider prefix in request_model; unprefixed aliases are individual groups, not verified vendor identities.
+Internal/external model entries contain id, name, request_model. Use safe IDs such as `external-a`; preserve the real provider alias such as `provider/model-a` in request_model. Never request other as a model. External entries may supply source_group when opaque aliases share an upstream provider. Otherwise grouping uses the request_model provider prefix; unprefixed aliases are individual groups, not verified vendor identities. Explicit grouping is retained, not silently discarded during task normalization.
 
 A probe has id/title and cells with exact prompt, system, effort, profile, history and parameters. Defaults are ASCII period system, empty history, low effort, and the protocol's normal profile. Confirm max_output_tokens and fee implications. New probes use exact_trimmed_casefold with max_length4096: complete nonempty text is stripped/casefolded, without option, integer-range or entity filters. Old package normalizers remain historical; do not relabel their aggregated categories as freshly normalized answers.
 
@@ -67,6 +67,7 @@ Version2 simulation proposes:
 - target .99 for each modeled source's full-run correct strong direction;
 - selection_target .999 for each wrong class/source/completion-pattern negative maximum;
 - threshold_cap .98 for every class, including other;
+- max_path_wrong .01 among qualified trajectories, checked across normal and source-out paths separately from selection coverage;
 - batches10000 per tier, configurable100–100000; seed45301;
 - split_policy windows.
 
@@ -82,7 +83,7 @@ The scorer accumulates actual valid answers into a joint posterior predictive co
 
 Calibration checks real prefixes of one sampled answer sequence: round-robin,20% missing, one fixed shuffle and each cell delayed in turn. It also removes each external source group from fitting for negative calibration when another reference remains. The final exact fit is checked separately on held-out counts, including source-out diagnostics. This does not enumerate every network schedule or every unknown model.
 
-Report correct/wrong/insufficient, qualification count, any-prefix wrong direction, error conditional on qualification/strong results and step changes. A candidate requiring a line above98% fails; the tool does not clip it into a success. Check failure does not automatically lower targets or add data to the fit.
+Report correct/wrong/insufficient, qualification count, any-prefix wrong direction, error conditional on qualification/strong results and step changes. Both normal and source-out qualified-path errors must meet max_path_wrong. A single external group cannot be removed while keeping a real external reference: that source-out scope is explicitly untested. A candidate requiring a line above98% fails; the tool does not clip it into a success. Check failure does not automatically lower targets or add data to the fit.
 
 ## Export and explain limits
 

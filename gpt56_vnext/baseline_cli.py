@@ -200,7 +200,7 @@ def prepare_package(task, root):
     return build_package(project, observations, collection=collection)
 
 
-def simulate(task, root):
+def simulate(task, root, progress=None):
     if task.get('task_version') == 2:
         from .predictive_simulation import calibrate_predictive
         _observations, collection, all_observations = data_for_task(task,root)
@@ -209,7 +209,7 @@ def simulate(task, root):
         folder.mkdir(parents=True,exist_ok=True)
         atomic_write_json(folder/'contract.json',{'input_sha256':identity,'options':task['simulation']})
         package,report = calibrate_predictive(task['project'],all_observations,collection,
-                                              task.get('external_models',[]),task['simulation'],folder)
+                                              task.get('external_models',[]),task['simulation'],folder,progress)
         passed = all(calibration_matches(package,t) for t in package['tiers'])
         atomic_write_json(root/'calibrated.meow.json',package)
         atomic_write_json(root/'simulation-report.json',{**report,'valid':passed})
@@ -313,7 +313,8 @@ def main(argv=None):
                 result = analyze_selection(task['project'], observations)
             atomic_write_json(root / 'analysis.json', result)
             return {'analysis': str(root / 'analysis.json')}
-        if args.command == 'simulate': return simulate(task, root)
+        if args.command == 'simulate':
+            return simulate(task,root,lambda value: print(json.dumps({'progress':value},ensure_ascii=True),flush=True))
         if args.command == 'export':
             package, summary = validate(root / 'calibrated.meow.json')
             if Path(args.output).exists(): raise AppError('output_already_exists')

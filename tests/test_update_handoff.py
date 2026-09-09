@@ -17,6 +17,17 @@ sys.path.insert(0,str(WORK))
 from gpt56_vnext import update_runtime
 from gpt56_vnext.managed_launcher import migrate_data
 from gpt56_vnext.updates import release_info
+from gpt56_vnext.processes import AppProcess
+
+
+def fixture_process(command, **kwargs):
+    # Embedded Python ignores cwd for module lookup. Explicitly load our synthetic
+    # application; real packaged-application handoff is tested separately.
+    position=command.index('-m')
+    assert command[position+1]=='gpt56_vnext'
+    bootstrap="import runpy,sys;sys.path.insert(0,sys.argv.pop(1));runpy.run_module('gpt56_vnext',run_name='__main__')"
+    command=[*command[:position],'-c',bootstrap,str(kwargs['cwd']),*command[position+2:]]
+    return AppProcess(command,**kwargs)
 
 
 class UpdateHandoffTests(unittest.TestCase):
@@ -45,7 +56,7 @@ HTTPServer(('127.0.0.1',args.port),Handler).serve_forever()
                 path=control/'job.json';path.write_text(json.dumps(job))
                 child=None
                 try:
-                    with patch.object(update_runtime,'interpreter',return_value=Path(sys.executable)):
+                    with patch.object(update_runtime,'interpreter',return_value=Path(sys.executable)), patch.object(update_runtime,'AppProcess',side_effect=fixture_process):
                         child=update_runtime.handoff(path,keep_process_handle=True)
                     status=json.loads((control/'status.json').read_text())
                     self.assertEqual(status['stage'],'failed' if fail else 'complete')

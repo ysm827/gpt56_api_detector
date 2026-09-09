@@ -1,13 +1,13 @@
-# meow LLM Detector v4.5.1 · Windows portable edition
+# meow4.5.3 · Windows portable
 
-For Windows 10 / 11, Intel / AMD 64-bit (x64). Includes Python 3.13.15 and all application dependencies. No Python installation, PATH changes or first-run dependency downloads. Model API calls still require a network connection.
+For Windows10/11 Intel/AMD x64. Python and dependencies are bundled and isolated; no Python installation or PATH setup is required.
 
-1. Download `windows-x64-portable-en.zip` (Chinese: `zh-CN`).
-2. **Extract everything into a new writable folder and double-click `start.bat`.** Do not run inside the ZIP or remove `portable-python`.
-3. If the browser does not open, visit `http://127.0.0.1:8765/`. Keep the terminal open while using the app; close it to stop.
+1. Extract the complete windows-x64-portable-en.zip into a new writable directory.
+2. Run start.bat; do not run inside the ZIP or remove the python directory.
+3. If needed, open http://127.0.0.1:8765/. Use start.bat --port8794 with a space between --port and8794 for another port.
 
-Data lives in `meow_runs`. Stop the old backend before copying this folder into a new installation. Keys in Windows Credential Manager do not move to another PC with the folder.
+The scorer, baselines and update flow match source distributions. One-click updates prepare a new directory, wait for tasks, restart and roll back a failed startup. Entering4.5.3 from4.5.2 needs the new launcher once; stop the old backend, then optionally use --migrate-from. Original data is preserved; vault references do not copy keys between computers.
 
-The detection core and benchmarks match standard v4.5.1; no recalibration is needed. For macOS / Linux, use the original source archives. Installation instructions in `README_SOURCE_EN.md` apply only to source packages; portable users should run `start.bat`, not `launch.py`.
+Closing the browser does not stop the backend. Finish detections, pause schedules and use Settings → Stop local service. The original start.bat opens the currently installed version. Reports in meow_runs are not recalculated by updates.
 
-Build information: `PORTABLE_BUILD.json`. File checksums: `SHA256SUMS.txt`. Python license: `portable-python/LICENSE.txt`; dependency licenses remain in their `.dist-info` directories. Statistical limitations: `TECHNICAL_REPORT_EN.md`.
+PORTABLE_BUILD.json records Python/dependencies/hashes. Checksums are in SHA256SUMS.txt. Python's license is python/LICENSE.txt; dependency licenses remain in.dist-info directories. See README_SOURCE_EN.md for source installation and TECHNICAL_REPORT_EN.md for statistical limitations.

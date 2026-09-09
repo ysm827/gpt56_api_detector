@@ -8,6 +8,6 @@ Research reference / 研究参考: Tomas Bruckner, *One Token Is Enough: Fingerp
 
 Implementation inspiration / 实现参考: https://github.com/hanlinwenyuan/hlwy-ai-checker. Original project history remains in Git; this release does not replace prior authorship with AI authorship.
 
-Python dependencies are installed separately with their own licenses; no third-party binaries are bundled: HTTPX (BSD-3-Clause), NumPy (BSD-3-Clause with additional bundled-component notices), keyring (MIT), and their transitive dependencies. Their installed distributions contain the authoritative license texts. Python is separately installed under the Python Software Foundation license. Node.js is only used for optional development UI tests, not by the application.
+Source packages install dependencies into a private environment. Windows portable packages bundle Python and dependencies: HTTPX (BSD-3-Clause), NumPy (BSD-3-Clause with bundled-component notices), keyring (MIT), and transitive dependencies. Authoritative licenses remain in installed distributions. Portable Python's PSF license is at python/LICENSE.txt; dependency licenses remain under python/Lib/site-packages. PORTABLE_BUILD.json records runtime/wheel hashes. Node.js is only used for development UI tests, not by the application.
 
-第三方依赖由 pip 单独安装，许可证以安装后的发行包为准；本包不捆绑 Python、Node、第三方字体或图片素材。界面使用系统字体和项目自有 HTML/CSS。
+源码包将依赖安装到独立环境；Windows便携包包含Python及依赖，保留其许可文件和构建记录。两种包都不捆绑Node、第三方字体或图片素材。界面使用系统字体和项目自有HTML/CSS。

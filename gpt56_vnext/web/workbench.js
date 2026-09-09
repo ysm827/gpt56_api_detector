@@ -182,6 +182,12 @@ function watchUpdate(){
 }
 action("quick-update",()=>checkUpdates(true),"program-status");
 action("program-check",()=>checkUpdates(true),"program-status");
+action("program-exit",async()=>{
+ if(!confirm(t("停止本地服务？历史报告会保留。")))return;
+ await post("/api/program/exit",{confirmed:true});
+ document.querySelectorAll('input[type="password"]').forEach(input=>input.value='');
+ $("program-status").textContent=t("本地服务已停止，下次运行启动器即可打开。");
+},"program-status");
 action("program-download",installProgram,"program-status");
 action("startup-program-update",installProgram,"program-status");
 action("startup-baseline-update",async()=>{
