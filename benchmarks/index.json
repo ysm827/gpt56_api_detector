@@ -3,6 +3,26 @@
   "packages": [
     {
       "id": "meow-gpt-other-cap98-efficient",
+      "version": "4.5.3-predictive.3",
+      "mode": "gpt",
+      "publisher": "maintainer",
+      "path": "benchmarks/official/meow-gpt-other-cap98-efficient--4.5.3-predictive.3.meow.json",
+      "sha256": "62e08c7316e27d014bae1531e22a78fe08cd892b6589ccefe779ada2ea8cba7b",
+      "content_sha256": "fd888fd0402ce687329d145ca3b58ba6fcff309aad62f6e91800cc2f6aca4328",
+      "minimum_program_version": "4.5.3"
+    },
+    {
+      "id": "meow-claude-other-cap98-efficient",
+      "version": "4.5.3-predictive.3",
+      "mode": "claude",
+      "publisher": "maintainer",
+      "path": "benchmarks/official/meow-claude-other-cap98-efficient--4.5.3-predictive.3.meow.json",
+      "sha256": "29e50352e1b8268e545723726f717d0fadd70433f4e4bbde5cb4b8f037e3e7b3",
+      "content_sha256": "eeac401648dd3ee7fc7f28d34b43733fa38c487e271d4e1d8a742fb71c192f63",
+      "minimum_program_version": "4.5.3"
+    },
+    {
+      "id": "meow-gpt-other-cap98-efficient",
       "version": "4.5.3-efficiency.rc1",
       "mode": "gpt",
       "content_sha256": "67a410ab169b2f997ec208cd1f01d03aa6870d647c0337c187f63fb11e4954d7",
