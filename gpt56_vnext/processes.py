@@ -42,6 +42,21 @@ class AppProcess:
 
     def poll(self):return self.process.poll()
 
+    def _signal_posix(self, sig):
+        deadline=time.monotonic()+2
+        while True:
+            try:
+                os.killpg(self.process.pid,sig)
+                return True
+            except ProcessLookupError:
+                return False
+            except PermissionError:
+                # Darwin can report EPERM for a zombie-only group. Reap our
+                # leader and retry briefly; a live leader's denial still fails.
+                if self.process.poll() is None or time.monotonic()>=deadline:
+                    raise
+                time.sleep(.02)
+
     def stop(self):
         if self.job:
             import ctypes
@@ -58,16 +73,13 @@ class AppProcess:
                 time.sleep(.01)
         elif os.name != 'nt':
             # A leader may have exited while its owned descendants still run.
-            try:
-                os.killpg(self.process.pid,signal.SIGTERM)
+            if self._signal_posix(signal.SIGTERM):
                 deadline=time.monotonic()+2
                 while time.monotonic()<deadline:
                     self.process.poll()  # Reap our leader, if it exited.
-                    os.killpg(self.process.pid,0)
+                    if not self._signal_posix(0):break
                     time.sleep(.02)
-                os.killpg(self.process.pid,signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+                else:self._signal_posix(signal.SIGKILL)
         self.process.wait(timeout=15)
         if os.name=='nt':self.process._handle.Close()
 

@@ -19,6 +19,18 @@ from gpt56_vnext import processes
 
 
 class AuditRepairTests(unittest.TestCase):
+    def test_posix_zombie_denial_is_reaped_but_live_denial_is_not_hidden(self):
+        child=processes.AppProcess.__new__(processes.AppProcess)
+        child.process=Mock(pid=123456)
+        child.process.poll.return_value=0
+        stop=Mock(side_effect=[PermissionError(),ProcessLookupError()])
+        with patch.object(processes,'os',SimpleNamespace(name='posix',killpg=stop)):
+            self.assertFalse(child._signal_posix(0))
+        self.assertEqual(stop.call_count,2)
+        child.process.poll.return_value=None
+        with patch.object(processes,'os',SimpleNamespace(name='posix',killpg=Mock(side_effect=PermissionError()))):
+            with self.assertRaises(PermissionError):child._signal_posix(0)
+
     def test_added_importable_code_blocks_update_but_data_does_not(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

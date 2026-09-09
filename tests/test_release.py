@@ -15,7 +15,6 @@ from gpt56_vnext.probability_model import score_counts
 from gpt56_vnext.server import create_server
 from gpt56_vnext.transport import build_payload
 from gpt56_vnext import BUNDLED_BASELINES
-from gpt56_vnext import BUNDLED_BASELINES
 
 
 class ReleaseTests(unittest.TestCase):
