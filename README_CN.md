@@ -1,4 +1,4 @@
-# meow LLM Detector 4.5.3
+# meow LLM Detector 4.5.4
 
 通过一组短问题的回答分布，对模型行为进行比较。结果是指纹证据，不是身份认证，也不是对服务商行为的归因。
 
@@ -9,7 +9,7 @@
 - 默认地址为 http://127.0.0.1:8765/ 。自定义端口可用 `start.bat --port 8790` 或 `sh start.sh --port 8790`。
 - [在线版](https://meowllm.top/) 无需安装，但报告公开且只支持公网 HTTPS API。
 
-正式下载以 [GitHub Releases](https://github.com/chen-006/meow-llm-detector/releases/tag/v4.5.3) 为准；不要将测试分支的临时验收包当成正式发行。
+正式下载以 [GitHub Releases](https://github.com/chen-006/meow-llm-detector/releases/tag/v4.5.4) 为准；不要将测试分支的临时验收包当成正式发行。
 
 ## 第一次检测
 
@@ -51,4 +51,4 @@ Claude 的普通中转默认使用 `claude-fable-5-1` 这类请求名；OpenRout
 
 检测不符不等于中转站故意替换模型，也可能与上游路由变化、服务降级或基准局限有关；本工具不能单独判定原因。[社区讨论](https://linux.do/t/topic/2811197) 提供经验背景，不是已证实的归因。
 
-更多：[使用说明](docs/USAGE_CN.md) · [技术与限制](TECHNICAL_REPORT_CN.md) · [制作基准](docs/BASELINES_CN.md) · [4.5.3变化](docs/CHANGELOG_CN.md)
+更多：[使用说明](docs/USAGE_CN.md) · [技术与限制](TECHNICAL_REPORT_CN.md) · [制作基准](docs/BASELINES_CN.md) · [4.5.4变化](docs/CHANGELOG_CN.md)

@@ -40,7 +40,7 @@ def records(data):
 
 def fixture_version(root, version, fail=False):
     init = root / 'gpt56_vnext/__init__.py'
-    init.write_text(init.read_text(encoding='utf-8').replace('__version__ = "4.5.3"',
+    init.write_text(init.read_text(encoding='utf-8').replace('__version__ = "4.5.4"',
                     '__version__ = ' + json.dumps(version)), encoding='utf-8')
     (root / 'VERSION').write_text(version + '\n', encoding='ascii')
     if fail:
@@ -64,7 +64,7 @@ def main():
     output.mkdir(parents=True,exist_ok=True)
     test = Path(tempfile.mkdtemp(prefix='发行验收 with spaces-', dir=output)).resolve()
     original, data = test / 'original', test / 'data'
-    info = unpack(args.archive.resolve(), original, '4.5.3', args.kind)
+    info = unpack(args.archive.resolve(), original, '4.5.4', args.kind)
     print('Preparing real independent environment:', original, flush=True)
     python = prepare_environment(original, args.kind)
     verify(original)
@@ -87,7 +87,7 @@ def main():
             command = [str(python), '-X', 'utf8', '-B', str(original / 'launch.py'), '--no-browser',
                        '--port', str(port), '--data-root', str(data)]
             child = AppProcess(command, cwd=test, stdin=subprocess.DEVNULL, stdout=log, stderr=log)
-            assert wait_health(port, '4.5.3', child, timeout=90), 'Packaged launcher failed; inspect launcher.log'
+            assert wait_health(port, '4.5.4', child, timeout=90), 'Packaged launcher failed; inspect launcher.log'
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
             for path in ('/', '/assets/ui.js', '/api/bootstrap'):
                 with opener.open(f'http://127.0.0.1:{port}' + path, timeout=5) as response:
@@ -99,27 +99,27 @@ def main():
                 child = None
     assert records(data) == before
     for fail in (False, True):
-        version = '4.5.5' if fail else '4.5.4'  # Synthetic upgrade versions, never published.
+        version = '99.0.2' if fail else '99.0.1'  # Synthetic upgrade versions, never published.
         stage = original / '.meow-versions' / version
-        unpack(args.archive.resolve(), stage, '4.5.3', args.kind)
+        unpack(args.archive.resolve(), stage, '4.5.4', args.kind)
         fixture_version(stage, version, fail)
         print('Preparing', 'rollback failure fixture' if fail else 'real-code upgrade fixture', flush=True)
         prepare_environment(stage, args.kind)
         control = test / ('rollback' if fail else 'upgrade')
         control.mkdir()
-        job = {'prepared': str(stage), 'previous': str(original), 'previous_version': '4.5.3',
+        job = {'prepared': str(stage), 'previous': str(original), 'previous_version': '4.5.4',
                'version': version, 'data': str(data), 'launch_root': str(original), 'kind': args.kind,
                'locale': info['locale'], 'port': port}
         # Start each check from the original package; preserve the first result separately.
         pointer = original / '.meow-current.json'
-        pointer.write_text(json.dumps({'version': '4.5.3', 'path': str(original)}), encoding='utf-8')
+        pointer.write_text(json.dumps({'version': '4.5.4', 'path': str(original)}), encoding='utf-8')
         job_path = control / 'job.json'
         job_path.write_text(json.dumps(job), encoding='utf-8')
         try:
             child = handoff(job_path, keep_process_handle=True)
             status = json.loads((control / 'status.json').read_text())
             assert status['stage'] == ('failed' if fail else 'complete'), status
-            assert wait_health(port, '4.5.3' if fail else version, child)
+            assert wait_health(port, '4.5.4' if fail else version, child)
             assert records(data) == before
             with closing(sqlite3.connect(data / 'state.sqlite3')) as db:
                 ref = db.execute("SELECT body_json FROM documents WHERE kind='fixture' AND id='vault-reference'").fetchone()

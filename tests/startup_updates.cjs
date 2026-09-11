@@ -16,6 +16,9 @@ vm.runInContext(source.slice(source.indexOf('let programUpdate='),source.indexOf
  context.state.snapshot.catalog.packages.push({id:'evil',mode:'gpt',publisher:'community',version:'99.0.0'});
  assert.equal(context.baselineUpdates().length,1);
  context.state.snapshot.catalog.packages[0].withdrawn='withdrawn';assert.equal(context.baselineUpdates().length,0);
+ context.state.snapshot.packages.push({id:'gpt-chat',mode:'chat',version:'4.5.4-chat.1',publisher:'maintainer'});
+ context.state.snapshot.catalog.packages.push({id:'claude-chat',mode:'chat',version:'4.5.4-chat.1',publisher:'maintainer'});
+ assert.equal(context.baselineUpdates().length,1,'Different Chat packages must not hide each other');
  failure=true;await context.checkUpdates(true);assert(fields.get('program-status').textContent.includes('自动检查'));
  assert(calls.every(v=>!v.includes('install')&&!v.includes('download')));
  console.log('Update checks, version ordering, baseline provenance, withdrawal and offline non-installation passed.');

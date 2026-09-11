@@ -2,6 +2,28 @@
   "schema_version": 1,
   "packages": [
     {
+      "id": "meow-claude-chat-compatible",
+      "version": "4.5.4-chat.1",
+      "name": "Claude · Chat 兼容版",
+      "mode": "chat",
+      "publisher": "maintainer",
+      "path": "benchmarks/official/meow-claude-chat-compatible--4.5.4-chat.1.meow.json",
+      "sha256": "747fd4a368e4bf375f0cbb829c01488b152f8bf280e386fd4895af40acd1676a",
+      "content_sha256": "d78d64f18f0219918cb58efb966c28d5a51b5d5143c9f025c16412f35f5daccd",
+      "minimum_program_version": "4.5.4"
+    },
+    {
+      "id": "meow-gpt-chat-compatible",
+      "version": "4.5.4-chat.1",
+      "name": "GPT · Chat 兼容版",
+      "mode": "chat",
+      "publisher": "maintainer",
+      "path": "benchmarks/official/meow-gpt-chat-compatible--4.5.4-chat.1.meow.json",
+      "sha256": "1c4fcdf71ff7707cecac4fa3bcb41b5e22ecc7a073e961d60a0bf459a3e30546",
+      "content_sha256": "0445bb9a7b348f2c2eaf4f9307144875a9b72dd3638966424f0cb16a1c5d49c8",
+      "minimum_program_version": "4.5.4"
+    },
+    {
       "id": "meow-gpt-other-cap98-efficient",
       "version": "4.5.3-predictive.3",
       "mode": "gpt",

@@ -109,7 +109,7 @@ async function refreshWorkbench() {
   $(target).replaceChildren();
   for(const item of items) {
    if(item.withdrawn)continue;
-   if(remote && state.snapshot.packages.some(p=>p.id===item.id&&p.version===item.version || item.publisher==='maintainer'&&p.publisher==='maintainer'&&p.mode===item.mode&&!newerVersion(item.version,p.version)))continue;
+   if(remote && state.snapshot.packages.some(p=>p.id===item.id&&p.version===item.version || item.publisher==='maintainer'&&p.publisher==='maintainer'&&(p.id===item.id || item.mode!=='chat'&&p.mode===item.mode)&&!newerVersion(item.version,p.version)))continue;
    const card=el("div",undefined,"package-row"); card.append(el("strong",MeowUI.baselineName(item)),el("p",item.version));
    const button=el("button",t(remote?"安装":"导出"));
    button.onclick=async()=>{try{
@@ -146,8 +146,9 @@ function baselineUpdates(){
  const local=state.snapshot.packages||[], remote=state.snapshot.catalog.packages||[];
  const latest=new Map();
  for(const item of remote){if(item.publisher!=="maintainer"||item.withdrawn)continue;
-  const current=local.filter(p=>p.id===item.id || p.mode===item.mode&&p.publisher==="maintainer");
-  if(current.length && current.every(p=>newerVersion(item.version,p.version)) && (!latest.has(item.mode)||newerVersion(item.version,latest.get(item.mode).version)))latest.set(item.mode,item);
+  const current=local.filter(p=>p.id===item.id || item.mode!=="chat"&&p.mode===item.mode&&p.publisher==="maintainer");
+  const group=item.mode==="chat"?item.id:item.mode;
+  if((current.length || item.mode==="chat") && current.every(p=>newerVersion(item.version,p.version)) && (!latest.has(group)||newerVersion(item.version,latest.get(group).version)))latest.set(group,item);
  }return [...latest.values()];
 }
 function updateNotice(message) {$("global-update-status").textContent=message;$("startup-updates").hidden=false;}

@@ -26,7 +26,7 @@ jobs:
       - run: python -B scripts/reproduce.py --check-only
       - run: python scripts/build_release.py --output dist
       - run: python -B scripts/check_process_tree.py
-      - run: python -B scripts/check_package_install.py --archive dist/meow-llm-detector-v4.5.3-en.zip --output acceptance-results
+      - run: python -B scripts/check_package_install.py --archive dist/meow-llm-detector-v4.5.4-en.zip --output acceptance-results
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -46,7 +46,7 @@ jobs:
       - run: python -m pip install -r requirements.txt
       - run: python scripts/build_windows_portable.py --source . --output dist --source-commit ${{ github.sha }}
       - run: python scripts/verify_windows_portable.py dist
-      - run: python -B scripts/check_package_install.py --archive dist/meow-llm-detector-v4.5.3-windows-x64-portable-en.zip --kind windows-x64-portable --output acceptance-results
+      - run: python -B scripts/check_package_install.py --archive dist/meow-llm-detector-v4.5.4-windows-x64-portable-en.zip --kind windows-x64-portable --output acceptance-results
       - uses: actions/upload-artifact@v4
         if: always()
         with:

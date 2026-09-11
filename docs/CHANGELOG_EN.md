@@ -1,3 +1,10 @@
+# 4.5.4
+
+- Retain current-segment deltas when a successful Responses completion omits its output container. Explicit empty text, refusals, truncation and failures do not fall back.
+- Recognize response.refusal.done.
+- Add GPT and Claude Chat-compatible baselines under Other for endpoints without Responses or Messages support. Original packages and the128-token budget remain unchanged.
+- Keep distinct Chat baselines independently visible to the updater.
+
 # 4.5.3
 
 - Detection/history share one page with unified purple styling, themes, typography, expansion state and mobile scrolling.

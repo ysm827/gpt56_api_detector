@@ -1,4 +1,4 @@
-# meow LLM Detector 4.5.3
+# meow LLM Detector 4.5.4
 
 Compare model behavior using distributions of answers to short probes. Fingerprint evidence is not identity authentication and does not establish why a provider's behavior differs.
 
@@ -9,7 +9,7 @@ Compare model behavior using distributions of answers to short probes. Fingerpri
 - The default address is http://127.0.0.1:8765/ . Pass `--port 8790` for a different port.
 - The [website](https://meowllm.top/) requires no installation; reports are public and upstream APIs must use public HTTPS.
 
-Use [GitHub Releases](https://github.com/chen-006/meow-llm-detector/releases/tag/v4.5.3) for official downloads; temporary acceptance-branch builds are not official release assets.
+Use [GitHub Releases](https://github.com/chen-006/meow-llm-detector/releases/tag/v4.5.4) for official downloads; temporary acceptance-branch builds are not official release assets.
 
 ## First detection
 

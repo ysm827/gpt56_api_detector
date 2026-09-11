@@ -121,7 +121,7 @@ class StreamParser:
                 if self.completed:
                     raise RequestError("invalid_stream")
                 self.parts[key] = self.parts.get(key, "") + str(value.get("delta", ""))
-            elif event == "response.refusal.delta":
+            elif event in {"response.refusal.delta", "response.refusal.done"}:
                 self.rejection = "response_refused"
             elif event in {"response.failed", "response.incomplete"}:
                 self.response = value.get("response", {})
@@ -142,7 +142,12 @@ class StreamParser:
                             self.rejection = "response_refused"
                         if part.get("type") == "output_text":
                             final[(output_index, content_index)] = part.get("text", "")
-                # The final completed response is authoritative within the selected segment.
+                # Only tolerate an omitted final output container after successful completion.
+                # Explicit final text (including empty text) remains authoritative.
+                output_missing = "output" not in response or response["output"] == []
+                if (output_missing and not self.rejection
+                        and not response.get("error") and not response.get("incomplete_details")):
+                    final = self.parts.copy()
                 self.parts = final
                 self.response = response
                 self.usage = response.get("usage", {})
