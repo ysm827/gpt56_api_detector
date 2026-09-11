@@ -54,7 +54,10 @@ class AppProcess:
                 # Darwin can report EPERM for a zombie-only group. Reap our
                 # leader and retry briefly; a live leader's denial still fails.
                 if self.process.poll() is None:
-                    raise
+                    if time.monotonic() >= deadline:
+                        raise
+                    time.sleep(.02)
+                    continue
                 if sys.platform == 'darwin':
                     # macOS may retain orphan zombies beyond the grace period.
                     # Check only group/state, never ignore denial for a live member.
