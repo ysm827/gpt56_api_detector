@@ -24,11 +24,20 @@ class AuditRepairTests(unittest.TestCase):
         child.process=Mock(pid=123456)
         child.process.poll.return_value=0
         stop=Mock(side_effect=[PermissionError(),ProcessLookupError()])
-        with patch.object(processes,'os',SimpleNamespace(name='posix',killpg=stop)):
+        with patch.object(processes,'os',SimpleNamespace(name='posix',killpg=stop)), patch.object(processes.sys,'platform','linux'):
             self.assertFalse(child._signal_posix(0))
         self.assertEqual(stop.call_count,2)
         child.process.poll.return_value=None
         with patch.object(processes,'os',SimpleNamespace(name='posix',killpg=Mock(side_effect=PermissionError()))):
+            with self.assertRaises(PermissionError):child._signal_posix(0)
+
+    def test_darwin_only_zombies_are_not_running(self):
+        child=processes.AppProcess.__new__(processes.AppProcess)
+        child.process=Mock(pid=123456)
+        child.process.poll.return_value=0
+        with patch.object(processes.sys,'platform','darwin'), patch.object(processes,'os',SimpleNamespace(killpg=Mock(side_effect=PermissionError()))), patch.object(processes.subprocess,'check_output',return_value='123456 Z\n99 S\n'):
+            self.assertFalse(child._signal_posix(0))
+        with patch.object(processes.sys,'platform','darwin'), patch.object(processes,'os',SimpleNamespace(killpg=Mock(side_effect=PermissionError()))), patch.object(processes.subprocess,'check_output',return_value='123456 S\n'), patch.object(processes.time,'monotonic',side_effect=[0,3]):
             with self.assertRaises(PermissionError):child._signal_posix(0)
 
     def test_added_importable_code_blocks_update_but_data_does_not(self):

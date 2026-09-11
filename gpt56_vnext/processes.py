@@ -53,7 +53,17 @@ class AppProcess:
             except PermissionError:
                 # Darwin can report EPERM for a zombie-only group. Reap our
                 # leader and retry briefly; a live leader's denial still fails.
-                if self.process.poll() is None or time.monotonic()>=deadline:
+                if self.process.poll() is None:
+                    raise
+                if sys.platform == 'darwin':
+                    # macOS may retain orphan zombies beyond the grace period.
+                    # Check only group/state, never ignore denial for a live member.
+                    rows = subprocess.check_output(['/bin/ps', '-axo', 'pgid=,stat='], text=True, timeout=2)
+                    members = [row.split()[1] for row in rows.splitlines()
+                               if len(row.split()) == 2 and row.split()[0] == str(self.process.pid)]
+                    if all(state.startswith('Z') for state in members):
+                        return False
+                if time.monotonic()>=deadline:
                     raise
                 time.sleep(.02)
 
