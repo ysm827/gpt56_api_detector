@@ -1,5 +1,6 @@
 # meow LLM Detector 4.5.4
 
+EN：https://github.com/chen-006/meow-llm-detector/blob/main/README_EN.md
 通过一组短问题的回答分布，对模型行为进行比较。结果是指纹证据，不是身份认证，也不是对服务商行为的归因。
 
 ## 下载与启动
